@@ -1,0 +1,32 @@
+#!/bin/bash
+# ============================================================================
+# Git Post-Checkout Hook
+# ============================================================================
+# Purpose: Reinstall Git hooks after checkout/clone operations
+# Triggered: After successful checkout (including clone)
+# ============================================================================
+
+HOOK_DIR=".git/hooks"
+HOOKS_SOURCE="git-hooks"
+
+# Only run if we're in a Git repository
+if [ ! -d ".git" ]; then
+  exit 0
+fi
+
+# Install hooks from git-hooks directory if they exist
+if [ -d "$HOOKS_SOURCE" ]; then
+  echo "Installing Git hooks from $HOOKS_SOURCE..."
+  
+  for hook in pre-commit commit-msg post-merge post-checkout; do
+    if [ -f "$HOOKS_SOURCE/$hook" ]; then
+      cp "$HOOKS_SOURCE/$hook" "$HOOK_DIR/$hook"
+      chmod +x "$HOOK_DIR/$hook"
+      echo "✓ Installed: $hook"
+    fi
+  done
+  
+  echo "✓ Git hooks installation complete"
+fi
+
+exit 0

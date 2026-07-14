@@ -1,0 +1,165 @@
+# ============================================================================
+# Git Ignore Configuration
+# Prevents sensitive files and build artifacts from being committed
+# ============================================================================
+
+# ============================================================================
+# CREDENTIALS & SENSITIVE FILES (CRITICAL)
+# ============================================================================
+# Environment files with credentials
+.env
+.env.local
+.env.*.local
+.env.prod
+.env.staging
+.env.dev
+
+# SSH and GPG keys
+.ssh/
+~/.ssh/
+private_keys/
+*.pem
+*.key
+*.keystore
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# GPG keys and configurations
+.gnupg/
+secret_keys/
+private-keys-v1.d/
+
+# Git credentials and hooks
+.git/hooks/pre-commit
+.git/config.local
+credentials.sh
+credentials.json
+secrets/
+
+# ============================================================================
+# NODE.JS & NPM
+# ============================================================================
+node_modules/
+npm-debug.log
+npm-debug.log*
+yarn-error.log*
+yarn-debug.log*
+.npmrc
+.npm/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ============================================================================
+# PYTHON
+# ============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+ENV/
+env/
+.venv
+
+# ============================================================================
+# IDE & EDITOR
+# ============================================================================
+.vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.iml
+*.iws
+*.ipr
+
+# ============================================================================
+# BUILD & DIST
+# ============================================================================
+/dist/
+/build/
+.next/
+out/
+.nuxt/
+.cache/
+.parcel-cache/
+.vuepress/dist/
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+
+# ============================================================================
+# OS SPECIFIC
+# ============================================================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# ============================================================================
+# PROJECT SPECIFIC
+# ============================================================================
+*.log
+*.logs
+.temp/
+tmp/
+temp/
+debug/
+.debug
+
+# ============================================================================
+# COVERAGE & TESTING
+# ============================================================================
+coverage/
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mocha_output/
+.nyc_output/
+
+# ============================================================================
+# LOCAL DEVELOPMENT
+# ============================================================================
+.local/
+*.local.*
+settings.local.json
+config.local.json
+
+# ============================================================================
+# GENERATED ARTIFACTS (runtime outputs, reports, PDFs)
+# ============================================================================
+artifacts/
