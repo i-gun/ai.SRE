@@ -9,8 +9,12 @@ Requirements:
 1) List matching incidents first (number, short description, priority, assignment group, sys_id).
 2) Confirm total count.
 3) Assign each incident to my configured ServiceNow user (assigned_to from my environment/config).
-4) Add a work note to each reassigned incident: "Auto-assigned for triage by configured ServiceNow user."
-5) Return a final summary with:
+4) For each matched incident, update:
+   - Category = 'Application'
+   - Subcategory = 'E-Commerce'
+   - Service offering = existing incident Configuration item value (cmdb_ci) if present; otherwise leave empty
+5) Add a work note to each reassigned incident: "Auto-assigned for triage by configured ServiceNow user."
+6) Return a final summary with:
    - Successfully assigned incidents
    - Any skipped/failed incidents with reason
    - Remaining active unassigned incidents (if any)
