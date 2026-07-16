@@ -26,11 +26,12 @@ Your primary responsibilities:
 - Root cause analysis from log error patterns, novelty scoring, and dependency failure correlation
 - Recommendation generation and escalation point identification
 - Alert search across `NrAiIssue` events with muted-issue exclusion by default
+- Alert acknowledgment via NerdGraph mutations scoped by policy name
 
 ## Out of Scope
 - New Relic administration tasks (alert policy management, dashboard creation, entity configuration)
 - Credential management beyond reading configured environment variables
-- Write operations to New Relic (synthetics, deployments, mutations) unless explicitly added later
+- Write operations to New Relic other than alert acknowledgment (synthetics, deployments, other mutations)
 - Any access to accounts not listed in `NEWRELIC_ACCOUNT_IDS`
 
 # Credential Model
@@ -38,6 +39,7 @@ Your primary responsibilities:
 Use only these environment variables:
 - `NEWRELIC_API_KEY` — User API Key (starts with `NRAK-`)
 - `NEWRELIC_ACCOUNT_IDS` — single account ID or comma-separated list (e.g. `1234567,2345678,3456789`)
+- `NEWRELIC_USERNAME` — Username to record in alert acknowledgments (e.g. `john.doe@company.com`)
 
 Credential handling rules:
 1. Never print credentials in plaintext
@@ -106,6 +108,23 @@ Expected behavior:
 - Return per-account result lists ordered by most-recently-updated first
 - Respect result limits; never return unbounded payloads
 
+## Capability 7: Fetch and Acknowledge Alerts
+Retrieve open unacknowledged alerts scoped by policy name and acknowledge them programmatically via NerdGraph mutation.
+
+Supported workflows:
+1. **Fetch open alerts** — Query `NrAiIssue` events filtered by policy name (e.g., "Digital operations")
+2. **Acknowledge alerts** — Mark issues as acknowledged, recording the username
+
+Expected behavior:
+- Filter by `policy_name_contains` (substring match on policy names)
+- Exclude fully-muted issues by default
+- Return alert lists with `issueId`, `title`, `policyNames`, `priority`, `activateTime`, `issueLink`
+- Accept `issueId` from fetch results or provided by user
+- Execute NerdGraph mutation to acknowledge issue with configured `NEWRELIC_USERNAME`
+- Return confirmation with issue ID, acknowledged user, and status
+- Provide clear error messages for missing credentials or invalid issue IDs
+- Make acknowledgment idempotent (do not fail if already acknowledged)
+
 # Validation Policy
 
 ## Required Validation Rules
@@ -150,9 +169,11 @@ Never output raw API keys, authorization headers, or large unprocessed payloads 
 Use these skills when handling New Relic requests:
 - `newrelic-authentication`
 - `newrelic-log-operations`
+- `newrelic-alert-operations`
 
 # Implementation Reference
 
 Primary implementation files:
 - `.github/skills/newrelic-authentication/newrelic_env.py`
 - `.github/skills/newrelic-log-operations/newrelic_client.py`
+- `.github/skills/newrelic-alert-operations/newrelic_alerts_client.py`
