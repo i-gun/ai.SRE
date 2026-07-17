@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 
@@ -41,19 +42,21 @@ class _FakeSNConfig:
 class _FakeSNClient:
     INCIDENT_TABLE_PATH = "/api/now/table/incident"
 
-    def __init__(self, *, existing_incident=None):
+    def __init__(self, *, existing_incidents=None):
         self.config = _FakeSNConfig(["IT - Epam - Monitoring - ODP"])
-        self.existing_incident = existing_incident
+        self.existing_incidents = list(existing_incidents or [])
         self.patch_payloads = []
         self.post_payloads = []
+        self.get_params = []
 
     def _request(self, method, path, params=None, json=None):
         if method == "GET":
-            return {"result": [self.existing_incident] if self.existing_incident else []}
+            self.get_params.append(params or {})
+            return {"result": self.existing_incidents}
 
         if method == "PATCH":
             self.patch_payloads.append(json or {})
-            updated = dict(self.existing_incident or {})
+            updated = dict(self.existing_incidents[0] if self.existing_incidents else {})
             updated.update(json or {})
             return {"result": updated}
 
@@ -86,12 +89,15 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
 
     def test_existing_assigned_incident_stops_without_update(self):
         sn_client = _FakeSNClient(
-            existing_incident={
-                "sys_id": "abc",
-                "number": "INC0000123",
-                "assigned_to": "oncall.user",
-                "cmdb_ci": "CI-1",
-            }
+            existing_incidents=[
+                {
+                    "sys_id": "abc",
+                    "number": "INC0000123",
+                    "assigned_to": "oncall.user",
+                    "cmdb_ci": "CI-1",
+                    "active": "true",
+                }
+            ]
         )
         orchestrator = AlertToIncidentOrchestrator(
             newrelic_client=_FakeNRClient(self._nr_alerts()),
@@ -110,12 +116,15 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
 
     def test_existing_unassigned_incident_is_assigned_and_enriched(self):
         sn_client = _FakeSNClient(
-            existing_incident={
-                "sys_id": "def",
-                "number": "INC0000456",
-                "assigned_to": "",
-                "cmdb_ci": "Digital - Existing CI",
-            }
+            existing_incidents=[
+                {
+                    "sys_id": "def",
+                    "number": "INC0000456",
+                    "assigned_to": "",
+                    "cmdb_ci": "Digital - Existing CI",
+                    "active": "true",
+                }
+            ]
         )
         orchestrator = AlertToIncidentOrchestrator(
             newrelic_client=_FakeNRClient(self._nr_alerts()),
@@ -133,7 +142,7 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
         self.assertEqual(patch_payload["service_offering"], "Digital - Existing CI")
 
     def test_missing_incident_creates_new_with_required_fields(self):
-        sn_client = _FakeSNClient(existing_incident=None)
+        sn_client = _FakeSNClient(existing_incidents=None)
         orchestrator = AlertToIncidentOrchestrator(
             newrelic_client=_FakeNRClient(self._nr_alerts()),
             servicenow_client=sn_client,
@@ -157,6 +166,58 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
         self.assertEqual(payload["assignment_group"], "IT - Epam - Monitoring - ODP")
         self.assertEqual(payload["assigned_to"], "sn_integration_user")
 
+    def test_resolved_incident_is_reported_without_update(self):
+        sn_client = _FakeSNClient(
+            existing_incidents=[
+                {
+                    "sys_id": "ghi",
+                    "number": "INC0000789",
+                    "assigned_to": "resolver.user",
+                    "active": "false",
+                    "state": "Resolved",
+                    "close_notes": "Restarted service and confirmed recovery.",
+                }
+            ]
+        )
+        orchestrator = AlertToIncidentOrchestrator(
+            newrelic_client=_FakeNRClient(self._nr_alerts()),
+            servicenow_client=sn_client,
+            config=self._config(),
+        )
+
+        result = orchestrator.run()
+        self.assertEqual(result["summary"]["servicenow_incidents_raised_new"], 0)
+        self.assertEqual(
+            result["summary"]["servicenow_incidents_acknowledged_only_already_raised"], 1
+        )
+        self.assertEqual(result["report"][0]["servicenow_incident_number"], "INC0000789")
+        self.assertEqual(
+            result["report"][0]["servicenow_resolution_notes"],
+            "Restarted service and confirmed recovery.",
+        )
+        self.assertEqual(sn_client.patch_payloads, [])
+        self.assertEqual(sn_client.post_payloads, [])
+
+    def test_lookup_query_uses_substring_match_and_time_window(self):
+        sn_client = _FakeSNClient(existing_incidents=None)
+        orchestrator = AlertToIncidentOrchestrator(
+            newrelic_client=_FakeNRClient(self._nr_alerts()),
+            servicenow_client=sn_client,
+            config=OrchestratorConfig(
+                servicenow_user="sn_integration_user",
+                caller_id="sn_integration_user",
+                since="3 hours ago",
+            ),
+        )
+
+        query = orchestrator._build_incident_lookup_query(
+            alert_title="Digital Operations - Checkout errors",
+            now=datetime(2026, 7, 17, 20, 0, 0),
+        )
+        self.assertIn("short_descriptionLIKEDigital Operations - Checkout errors", query)
+        self.assertIn("sys_created_on>=2026-07-17 17:00:00", query)
+        self.assertIn("sys_created_on<=2026-07-17 20:00:00", query)
+
     def test_markdown_format_contains_summary_and_table(self):
         markdown = format_markdown_report(
             {
@@ -168,6 +229,7 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
                         "acknowledgement_status": "success",
                         "servicenow_incident_number": "INC0001",
                         "servicenow_assignee": "user1",
+                        "servicenow_resolution_notes": "Recovered after restart.",
                     }
                 ],
                 "summary": {
@@ -180,6 +242,7 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
         self.assertIn("# New Relic -> ServiceNow Orchestrator Report", markdown)
         self.assertIn("| New Relic alert title |", markdown)
         self.assertIn("Checkout error", markdown)
+        self.assertIn("Recovered after restart.", markdown)
         self.assertIn("Open New Relic alerts acknowledged: **1**", markdown)
 
 

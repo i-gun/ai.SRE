@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -61,6 +63,30 @@ def _escape_query_value(value: str) -> str:
     return str(value or "").replace("^", " ").strip()
 
 
+def _parse_since_to_timedelta(since: str) -> timedelta:
+    value = (since or "").strip().lower()
+    match = re.fullmatch(r"(\d+)\s+(minute|minutes|hour|hours|day|days)\s+ago", value)
+    if not match:
+        raise ValueError(
+            "Unsupported since format. Use values like '30 minutes ago', '1 hour ago', or '3 days ago'."
+        )
+
+    amount = int(match.group(1))
+    unit = match.group(2)
+    if amount <= 0:
+        raise ValueError("Since value amount must be greater than zero.")
+
+    if unit in {"minute", "minutes"}:
+        return timedelta(minutes=amount)
+    if unit in {"hour", "hours"}:
+        return timedelta(hours=amount)
+    return timedelta(days=amount)
+
+
+def _format_servicenow_datetime(value: datetime) -> str:
+    return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _markdown_cell(value: Any) -> str:
     return str(value or "").replace("|", "\\|").replace("\n", " ").strip()
 
@@ -76,8 +102,8 @@ def format_markdown_report(result: Dict[str, Any]) -> str:
         "",
         "## Per-alert report",
         "",
-        "| New Relic alert title | Acknowledgement status | ServiceNow incident | Assignee |",
-        "| --- | --- | --- | --- |",
+        "| New Relic alert title | Acknowledgement status | ServiceNow incident | Assignee | Resolution notes |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for item in report:
         lines.append(
@@ -85,7 +111,8 @@ def format_markdown_report(result: Dict[str, Any]) -> str:
             f"{_markdown_cell(item.get('newrelic_alert_title'))} | "
             f"{_markdown_cell(item.get('acknowledgement_status'))} | "
             f"{_markdown_cell(item.get('servicenow_incident_number'))} | "
-            f"{_markdown_cell(item.get('servicenow_assignee'))} |"
+            f"{_markdown_cell(item.get('servicenow_assignee'))} | "
+            f"{_markdown_cell(item.get('servicenow_resolution_notes'))} |"
         )
 
     lines.extend(
@@ -132,14 +159,18 @@ class AlertToIncidentOrchestrator:
                 if ack_result.get("status") == "success":
                     acknowledged_count += 1
 
-                incident_number, assignee, incident_action = self._handle_incident_for_alert(
+                incident_number, assignee, incident_action, resolution_notes = self._handle_incident_for_alert(
                     alert_title=title,
                     alert_url=str(alert.get("issueLink") or "").strip(),
                 )
 
                 if incident_action == "created_new":
                     raised_new_count += 1
-                elif incident_action in {"existing_assigned", "existing_unassigned_assigned"}:
+                elif incident_action in {
+                    "existing_assigned",
+                    "existing_unassigned_assigned",
+                    "existing_resolved",
+                }:
                     existing_incident_count += 1
 
                 per_alert_report.append(
@@ -148,6 +179,7 @@ class AlertToIncidentOrchestrator:
                         "acknowledgement_status": str(ack_result.get("status") or ""),
                         "servicenow_incident_number": incident_number,
                         "servicenow_assignee": assignee,
+                        "servicenow_resolution_notes": resolution_notes,
                     }
                 )
 
@@ -182,19 +214,28 @@ class AlertToIncidentOrchestrator:
             issue_id=issue_id,
         )
 
-    def _handle_incident_for_alert(self, *, alert_title: str, alert_url: str) -> Tuple[str, str, str]:
-        existing = self._find_active_incident_by_alert_title(alert_title)
+    def _handle_incident_for_alert(
+        self,
+        *,
+        alert_title: str,
+        alert_url: str,
+    ) -> Tuple[str, str, str, str]:
+        existing = self._find_incident_by_alert_title_and_time_window(alert_title)
         if existing:
             current_assignee = _extract_reference_value(existing.get("assigned_to"))
             incident_number = _extract_reference_value(existing.get("number"))
+            resolution_notes = _extract_reference_value(existing.get("close_notes"))
+            if not self._is_active_incident(existing):
+                return incident_number, current_assignee, "existing_resolved", resolution_notes
             if current_assignee:
-                return incident_number, current_assignee, "existing_assigned"
+                return incident_number, current_assignee, "existing_assigned", resolution_notes
 
             updated = self._assign_unassigned_incident(existing)
             return (
                 _extract_reference_value(updated.get("number")) or incident_number,
                 _extract_reference_value(updated.get("assigned_to")) or self.config.servicenow_user,
                 "existing_unassigned_assigned",
+                resolution_notes,
             )
 
         created = self._create_new_incident(alert_title=alert_title, alert_url=alert_url)
@@ -202,34 +243,65 @@ class AlertToIncidentOrchestrator:
             _extract_reference_value(created.get("number")),
             _extract_reference_value(created.get("assigned_to")) or self.config.servicenow_user,
             "created_new",
+            "",
         )
 
     def _build_designated_group_clause(self) -> str:
         groups = getattr(self.servicenow_client.config, "assignment_groups", [])
         return "assignment_group.nameIN" + ",".join(groups)
 
-    def _find_active_incident_by_alert_title(self, alert_title: str) -> Optional[Dict[str, Any]]:
+    def _build_incident_lookup_query(
+        self,
+        *,
+        alert_title: str,
+        now: Optional[datetime] = None,
+    ) -> str:
+        current_time = now or datetime.now()
+        window_start = current_time - _parse_since_to_timedelta(self.config.since)
         query_title = _escape_query_value(alert_title)
-        query = "^".join(
+        return "^".join(
             [
                 self._build_designated_group_clause(),
-                "active=true",
                 f"short_descriptionLIKE{query_title}",
+                f"sys_created_on>={_format_servicenow_datetime(window_start)}",
+                f"sys_created_on<={_format_servicenow_datetime(current_time)}",
             ]
         )
+
+    @staticmethod
+    def _is_active_incident(incident: Dict[str, Any]) -> bool:
+        active_value = _extract_reference_value(incident.get("active")).lower()
+        if active_value:
+            return active_value not in {"false", "0", "no"}
+
+        state_value = _extract_reference_value(incident.get("state")).lower()
+        return state_value not in {"resolved", "closed", "6", "7"}
+
+    def _find_incident_by_alert_title_and_time_window(self, alert_title: str) -> Optional[Dict[str, Any]]:
+        query = self._build_incident_lookup_query(alert_title=alert_title)
         response = self.servicenow_client._request(
             "GET",
             self.servicenow_client.INCIDENT_TABLE_PATH,
             params={
                 "sysparm_query": query,
-                "sysparm_limit": 1,
+                "sysparm_limit": self.config.limit,
                 "sysparm_order_by_desc": "sys_updated_on",
+                "sysparm_fields": (
+                    "sys_id,number,short_description,assigned_to,assignment_group,"
+                    "cmdb_ci,active,state,close_notes,sys_created_on,sys_updated_on"
+                ),
                 "sysparm_display_value": "true",
                 "sysparm_exclude_reference_link": "true",
             },
         )
         incidents = response.get("result", [])
-        return incidents[0] if incidents else None
+        if not incidents:
+            return None
+
+        for incident in incidents:
+            if self._is_active_incident(incident):
+                return incident
+        return incidents[0]
 
     def _assign_unassigned_incident(self, incident: Dict[str, Any]) -> Dict[str, Any]:
         sys_id = _extract_reference_value(incident.get("sys_id"))

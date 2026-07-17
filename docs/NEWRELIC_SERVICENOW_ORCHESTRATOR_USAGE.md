@@ -9,15 +9,18 @@ Script path:
 For each open unacknowledged New Relic alert in scoped account `1679802`:
 
 1. Acknowledges the New Relic alert.
-2. Searches ServiceNow active incidents by short description like the alert title.
+2. Searches ServiceNow incidents by:
+   - short description substring match (`LIKE *<alert title>*` semantics)
+   - incident creation time within the same requested window (for example `1 hour ago`, `3 hours ago`)
 3. Branches:
    - Existing + assigned: no ServiceNow change (stop for that alert).
    - Existing + unassigned: assigns to configured user and updates fields per `servicenow-assign-unassigned-incidents.prompt.md`.
+   - Existing + resolved: no ServiceNow change; report incident number, assignee, and resolution notes.
    - Not found: creates a new incident with required defaults, including:
      - Contact = `teams`
      - Channel = `Self-service`
 4. Produces:
-   - Per-alert report (`alert title -> ack status`, `incident number -> assignee`)
+   - Per-alert report (`alert title -> ack status`, `incident number -> assignee`, `resolution notes`)
    - Summary counts:
      - Open New Relic alerts acknowledged
      - ServiceNow incidents raised (new)
@@ -87,7 +90,8 @@ Use these prompts directly in Copilot Chat:
       "newrelic_alert_title": "Digital Operations - Checkout errors",
       "acknowledgement_status": "success",
       "servicenow_incident_number": "INC0012345",
-      "servicenow_assignee": "sn_integration_user"
+      "servicenow_assignee": "sn_integration_user",
+      "servicenow_resolution_notes": ""
     }
   ],
   "summary": {
