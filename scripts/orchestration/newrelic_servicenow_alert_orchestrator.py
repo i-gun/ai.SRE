@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from difflib import SequenceMatcher
 import os
 import re
 import sys
@@ -89,6 +90,30 @@ def _format_servicenow_datetime(value: datetime) -> str:
 
 def _markdown_cell(value: Any) -> str:
     return str(value or "").replace("|", "\\|").replace("\n", " ").strip()
+
+
+def _normalize_match_text(value: str) -> str:
+    lowered = str(value or "").lower()
+    normalized = re.sub(r"[^a-z0-9]+", " ", lowered)
+    return " ".join(normalized.split())
+
+
+def _matching_tokens(value: str) -> List[str]:
+    tokens = [token for token in _normalize_match_text(value).split() if len(token) >= 3]
+    return tokens
+
+
+def _strip_quotes(value: str) -> str:
+    return str(value or "").replace("'", "").replace('"', "").strip()
+
+
+def _lookup_anchor(value: str) -> str:
+    original_tokens = re.findall(r"[A-Za-z0-9_-]{3,}", _strip_quotes(value))
+    if original_tokens:
+        return original_tokens[0]
+
+    normalized_tokens = _matching_tokens(value)
+    return normalized_tokens[0] if normalized_tokens else ""
 
 
 def format_markdown_report(result: Dict[str, Any]) -> str:
@@ -258,15 +283,40 @@ class AlertToIncidentOrchestrator:
     ) -> str:
         current_time = now or datetime.now()
         window_start = current_time - _parse_since_to_timedelta(self.config.since)
-        query_title = _escape_query_value(alert_title)
+        query_title = _escape_query_value(_strip_quotes(alert_title))
+        query_anchor = _escape_query_value(_lookup_anchor(alert_title))
         return "^".join(
             [
                 self._build_designated_group_clause(),
-                f"short_descriptionLIKE{query_title}",
                 f"sys_created_on>={_format_servicenow_datetime(window_start)}",
                 f"sys_created_on<={_format_servicenow_datetime(current_time)}",
+                f"short_descriptionLIKE{query_anchor or query_title[:80]}",
             ]
         )
+
+    def _match_incident_to_alert(self, *, alert_title: str, incident: Dict[str, Any]) -> float:
+        incident_title = _extract_reference_value(incident.get("short_description"))
+        normalized_alert = _normalize_match_text(_strip_quotes(alert_title))
+        normalized_incident = _normalize_match_text(incident_title)
+        if not normalized_alert or not normalized_incident:
+            return 0.0
+
+        if normalized_alert == normalized_incident:
+            return 1.0
+        if normalized_alert in normalized_incident or normalized_incident in normalized_alert:
+            return 0.98
+
+        alert_tokens = set(_matching_tokens(alert_title))
+        incident_tokens = set(_matching_tokens(incident_title))
+        if not alert_tokens or not incident_tokens:
+            return 0.0
+
+        overlap_ratio = len(alert_tokens & incident_tokens) / len(alert_tokens)
+        sequence_ratio = SequenceMatcher(None, normalized_alert, normalized_incident).ratio()
+
+        if overlap_ratio < 0.6 and sequence_ratio < 0.72:
+            return 0.0
+        return max(overlap_ratio, sequence_ratio)
 
     @staticmethod
     def _is_active_incident(incident: Dict[str, Any]) -> bool:
@@ -284,7 +334,7 @@ class AlertToIncidentOrchestrator:
             self.servicenow_client.INCIDENT_TABLE_PATH,
             params={
                 "sysparm_query": query,
-                "sysparm_limit": self.config.limit,
+                "sysparm_limit": max(self.config.limit * 5, 50),
                 "sysparm_order_by_desc": "sys_updated_on",
                 "sysparm_fields": (
                     "sys_id,number,short_description,assigned_to,assignment_group,"
@@ -298,10 +348,24 @@ class AlertToIncidentOrchestrator:
         if not incidents:
             return None
 
+        scored_matches: List[Tuple[float, Dict[str, Any]]] = []
         for incident in incidents:
-            if self._is_active_incident(incident):
-                return incident
-        return incidents[0]
+            score = self._match_incident_to_alert(alert_title=alert_title, incident=incident)
+            if score > 0:
+                scored_matches.append((score, incident))
+
+        if not scored_matches:
+            return None
+
+        scored_matches.sort(
+            key=lambda item: (
+                item[0],
+                1 if self._is_active_incident(item[1]) else 0,
+                _extract_reference_value(item[1].get("sys_updated_on")),
+            ),
+            reverse=True,
+        )
+        return scored_matches[0][1]
 
     def _assign_unassigned_incident(self, incident: Dict[str, Any]) -> Dict[str, Any]:
         sys_id = _extract_reference_value(incident.get("sys_id"))
@@ -335,17 +399,18 @@ class AlertToIncidentOrchestrator:
                 f"Allowed: {allowed}"
             )
 
+        short_description = _strip_quotes(alert_title)
         payload = {
             "caller_id": self.config.caller_id,
-            "contact_type": self.config.contact,
-            "channel": self.config.channel,
+            "u_contact": self.config.contact,
+            "contact_type": self.config.channel,
             "category": self.config.category,
             "subcategory": self.config.subcategory,
             "service_offering": self.config.service_offering,
             "cmdb_ci": self.config.configuration_item,
             "assignment_group": self.config.assignment_group,
             "assigned_to": self.config.servicenow_user,
-            "short_description": alert_title,
+            "short_description": short_description,
             "description": alert_url,
         }
         response = self.servicenow_client._request(

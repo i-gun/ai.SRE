@@ -2,6 +2,39 @@
 
 This project contains GitHub Copilot AI tools agents and skills for advanced development workflows.
 
+## Quick Start
+
+### Credential Configuration
+All integrations read credentials from `.env` in the project root:
+
+```bash
+# Copy template to .env (not committed to repository)
+cp .env.template .env
+
+# Edit with your credentials
+SERVICENOW_HOST=https://your-instance.service-now.com
+SERVICENOW_USERNAME=your_user
+SERVICENOW_PASSWORD=your_secure_password
+SERVICENOW_ASSIGNMENT_GROUPS=Group1,Group2
+```
+
+**Security:** `.env` is in `.gitignore` — NEVER commit credentials.
+
+### Use Agents for Operations
+Always use agent delegation (`@AgentName`) rather than creating custom scripts:
+
+```bash
+@ServiceNow, [operation description]
+@Jira, [operation description]
+@Confluence, [operation description]
+```
+
+Agents automatically handle credential loading, validation, and error handling.
+
+### Development & Governance
+- **Integration Governance** — See [INTEGRATION_GOVERNANCE.md](docs/INTEGRATION_GOVERNANCE.md) for credential handling, script placement, and best practices
+- **Hook Setup** — See [GIT_HOOKS_IMPLEMENTATION.md](docs/GIT_HOOKS_IMPLEMENTATION.md) for automated documentation and formatting
+
 ## Project Structure
 
 ```

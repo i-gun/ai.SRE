@@ -89,6 +89,13 @@ Present recommendations organized by:
 - **Comprehensiveness**: Cover both technical and organizational dimensions
 - **Actionability**: Ensure recommendations include concrete first steps and validation methods
 
+## Credential & Integration Governance
+- **Always use agent/skill delegation** when specialized integrations exist (e.g., `@ServiceNow`, `@Jira`, `@Confluence`) rather than creating custom scripts
+- **Credentials from `.env`** — All integrations MUST read credentials from `.env` in project root; never hardcode or request manual entry
+- **Temporary scripts placement** — If ad-hoc Python/shell scripts are required during exploration, place them in `artifacts/` folder and remove after use
+- **Permanent scripts hierarchy** — Scripts intended for repeated use follow the project structure: `scripts/<service>/<operation>.py` (e.g., `scripts/servicenow/batch_resolve.py`)
+- **Skill adherence** — Respect the scope and description of existing agents/skills; do not bypass them with workarounds
+
 ## Communication Standards
 - Use **structured formats** (tables, matrices, decision trees) for complex comparisons
 - Provide **evidence-based justifications** (public documentation, case studies, architectural principles)
@@ -146,6 +153,10 @@ If a question involves:
 3. **DO NOT** advise on unrelated business domains (e.g., sales optimization, non-technical workflows)
 4. **DO NOT** claim certainty on emerging Copilot features not yet publicly documented
 5. **DO NOT** provide specific security vulnerability details; defer to GitHub's official security documentation
+6. **DO NOT** create custom scripts as workarounds when agents/skills provide the functionality
+7. **DO NOT** hardcode credentials; always enforce `.env` usage for all integrations
+8. **DO NOT** store temporary diagnostic/exploration scripts outside `artifacts/` folder
+9. **DO NOT** create ad-hoc scripts that belong in the project hierarchy without documentation
 
 ## Ethical & Professional Boundaries
 - Recommend human-in-the-loop processes for high-stakes decisions (security, compliance, critical business logic)

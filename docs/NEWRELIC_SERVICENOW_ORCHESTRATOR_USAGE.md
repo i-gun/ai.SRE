@@ -10,15 +10,17 @@ For each open unacknowledged New Relic alert in scoped account `1679802`:
 
 1. Acknowledges the New Relic alert.
 2. Searches ServiceNow incidents by:
-   - short description substring match (`LIKE *<alert title>*` semantics)
+   - short description substring match using a quote-stripped alert title (`LIKE *<alert title without quotes>*` semantics)
    - incident creation time within the same requested window (for example `1 hour ago`, `3 hours ago`)
+   - normalized title comparison that tolerates quote, punctuation, and separator differences between New Relic and ServiceNow text
 3. Branches:
    - Existing + assigned: no ServiceNow change (stop for that alert).
    - Existing + unassigned: assigns to configured user and updates fields per `servicenow-assign-unassigned-incidents.prompt.md`.
    - Existing + resolved: no ServiceNow change; report incident number, assignee, and resolution notes.
    - Not found: creates a new incident with required defaults, including:
-     - Contact = `teams`
-     - Channel = `Self-service`
+     - Short description = New Relic alert title with quotes removed
+     - Contact = `teams` via ServiceNow field `u_contact`
+     - Channel = `Self-service` via ServiceNow field `contact_type`
 4. Produces:
    - Per-alert report (`alert title -> ack status`, `incident number -> assignee`, `resolution notes`)
    - Summary counts:

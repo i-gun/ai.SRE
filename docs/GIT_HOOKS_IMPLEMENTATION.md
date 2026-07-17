@@ -277,6 +277,36 @@ Git Hooks Integration: Pre-commit hook automatically updates README.md
                       Advisor uses hook data for project analysis
 ```
 
+## Credential & Governance Integration
+
+### `.env` File Protection
+
+The pre-commit hook **protects** `.env` files from accidental commits:
+
+- `.env` is in `.gitignore` — never staged for commit
+- `.env.example` and `.env.template` are tracked (sanitized versions)
+- Hook detects if `.env` is about to be committed and prevents it
+- Team members must maintain local `.env` (not distributed)
+
+### Script Placement Enforcement
+
+The hooks system works with project structure governance:
+
+- **Temporary scripts** → `artifacts/` (auto-formatted, never committed long-term)
+- **Reusable scripts** → `scripts/` (auto-formatted, version controlled)
+- **Skills & agents** → `.github/` (structured, documented)
+
+Hook auto-formats Python files in both locations per placement rules.
+
+### Documentation Consistency
+
+Pre-commit hook ensures documentation stays synchronized:
+- When scripts move (e.g., diagnostic → permanent), README.md updates
+- When new skills/agents added, hook detects and suggests documentation
+- Change log maintains accurate record of governance adherence
+
+**Related:** See [INTEGRATION_GOVERNANCE.md](INTEGRATION_GOVERNANCE.md) for complete governance framework.
+
 ## Files Committed in This Phase
 
 ```

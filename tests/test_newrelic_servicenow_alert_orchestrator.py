@@ -16,6 +16,7 @@ if str(SCRIPT_PATH) not in sys.path:
 from newrelic_servicenow_alert_orchestrator import (  # noqa: E402
     AlertToIncidentOrchestrator,
     OrchestratorConfig,
+    _strip_quotes,
     format_markdown_report,
 )
 
@@ -93,6 +94,7 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
                 {
                     "sys_id": "abc",
                     "number": "INC0000123",
+                    "short_description": "Digital Operations - Checkout errors",
                     "assigned_to": "oncall.user",
                     "cmdb_ci": "CI-1",
                     "active": "true",
@@ -120,6 +122,7 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
                 {
                     "sys_id": "def",
                     "number": "INC0000456",
+                    "short_description": "Digital Operations - Checkout errors",
                     "assigned_to": "",
                     "cmdb_ci": "Digital - Existing CI",
                     "active": "true",
@@ -157,8 +160,8 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
         self.assertEqual(len(sn_client.post_payloads), 1)
         payload = sn_client.post_payloads[0]
         self.assertEqual(payload["caller_id"], "sn_integration_user")
-        self.assertEqual(payload["contact_type"], "teams")
-        self.assertEqual(payload["channel"], "Self-service")
+        self.assertEqual(payload["u_contact"], "teams")
+        self.assertEqual(payload["contact_type"], "Self-service")
         self.assertEqual(payload["category"], "Application")
         self.assertEqual(payload["subcategory"], "E-Commerce")
         self.assertEqual(payload["service_offering"], "Digital - New Relic Alerts - ODP")
@@ -172,6 +175,7 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
                 {
                     "sys_id": "ghi",
                     "number": "INC0000789",
+                    "short_description": "Digital Operations - Checkout errors",
                     "assigned_to": "resolver.user",
                     "active": "false",
                     "state": "Resolved",
@@ -214,9 +218,82 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
             alert_title="Digital Operations - Checkout errors",
             now=datetime(2026, 7, 17, 20, 0, 0),
         )
-        self.assertIn("short_descriptionLIKEDigital Operations - Checkout errors", query)
+        self.assertIn("short_descriptionLIKEDigital", query)
         self.assertIn("sys_created_on>=2026-07-17 17:00:00", query)
         self.assertIn("sys_created_on<=2026-07-17 20:00:00", query)
+
+    def test_quote_and_separator_differences_still_match_same_incident(self):
+        sn_client = _FakeSNClient(
+            existing_incidents=[
+                {
+                    "sys_id": "xyz",
+                    "number": "INC0053590",
+                    "short_description": (
+                        "ioms-prod query result is > 5.0 on - Scan&Buy - "
+                        "Exception Error while creating order (SUBMIT_ORDER) -"
+                    ),
+                    "assigned_to": "svc.sn.omnibus",
+                    "active": "true",
+                    "state": "In Progress",
+                    "sys_updated_on": "2026-07-17 12:59:23",
+                }
+            ]
+        )
+        orchestrator = AlertToIncidentOrchestrator(
+            newrelic_client=_FakeNRClient(
+                {
+                    1679802: [
+                        {
+                            "issueId": "issue-1",
+                            "title": (
+                                "ioms-prod query result is > 5.0 on 'Scan&Buy - "
+                                "Exception Error while creating order (SUBMIT_ORDER)'"
+                            ),
+                            "issueLink": "https://one.newrelic.com/alerts/issue-1",
+                        }
+                    ]
+                }
+            ),
+            servicenow_client=sn_client,
+            config=self._config(),
+        )
+
+        result = orchestrator.run()
+        self.assertEqual(result["summary"]["servicenow_incidents_raised_new"], 0)
+        self.assertEqual(result["report"][0]["servicenow_incident_number"], "INC0053590")
+        self.assertEqual(result["report"][0]["servicenow_assignee"], "svc.sn.omnibus")
+        self.assertEqual(sn_client.post_payloads, [])
+
+    def test_strip_quotes_removes_quotes_for_servicenow_title(self):
+        self.assertEqual(
+            _strip_quotes("ioms-prod on 'Scan&Buy - Exception Error'"),
+            "ioms-prod on Scan&Buy - Exception Error",
+        )
+
+    def test_new_incident_short_description_omits_quotes(self):
+        sn_client = _FakeSNClient(existing_incidents=None)
+        orchestrator = AlertToIncidentOrchestrator(
+            newrelic_client=_FakeNRClient(
+                {
+                    1679802: [
+                        {
+                            "issueId": "issue-1",
+                            "title": "Signal lost on 'Azure Function Logs - Failed Execution'",
+                            "issueLink": "https://one.newrelic.com/alerts/issue-1",
+                        }
+                    ]
+                }
+            ),
+            servicenow_client=sn_client,
+            config=self._config(),
+        )
+
+        orchestrator.run()
+        payload = sn_client.post_payloads[0]
+        self.assertEqual(
+            payload["short_description"],
+            "Signal lost on Azure Function Logs - Failed Execution",
+        )
 
     def test_markdown_format_contains_summary_and_table(self):
         markdown = format_markdown_report(
