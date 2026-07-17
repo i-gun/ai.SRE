@@ -1,6 +1,6 @@
 ---
 name: 'newrelic-alert-operations'
-description: 'New Relic alert acknowledgment operations skill for fetching open unacknowledged issues scoped by policy name and acknowledging them with configured username using .env-based API key and account ID list.'
+description: 'New Relic alert acknowledgment operations skill for fetching open unacknowledged issues scoped to account 1679802 and policies starting with Digital Operations, then acknowledging them with platform-resolved username.'
 keywords: ['newrelic', 'alerts', 'issues', 'acknowledge', 'digital-operations', 'nrql']
 ---
 
@@ -13,28 +13,41 @@ This skill provides New Relic NerdGraph operations for querying and acknowledgin
 The skill expects these variables in `.env`:
 - `NEWRELIC_API_KEY` — User API Key (starts with `NRAK-`)
 - `NEWRELIC_ACCOUNT_IDS` — Single account ID or comma-separated list
-- `NEWRELIC_USERNAME` — Username used for acknowledgments
+
+Username is resolved from New Relic platform identity using `NEWRELIC_API_KEY`.
 
 ## Supported Operations
 
 ### 1. Fetch Open Unacknowledged Alerts
-Query `NrAiIssue` events across configured accounts filtered by policy name.
+Query alert events across configured accounts filtered by policy name (`NrAiIssue` with `NrAiIncident` compatibility).
 
 Behavior:
-- Filter by `policyNames LIKE '%policy_name%'`
-- Always exclude muted alerts (`muted != 'fullyMuted'`)
-- Restrict to open/unacknowledged issue events (`event = 'ACTIVATED'`)
-- Fixed time window: `SINCE 1 hour ago UNTIL now`
+- Filter by `policyNames LIKE 'Digital Operations%'` by default
+- Policy lookup uses **starts with** semantics (prefix match)
+- Accommodates keyset-compatible names from `NrAiIncident` queries when needed:
+  - `policyNames` / `policyName`
+  - `conditionNames` / `conditionName`
+  - `issueId` / `incidentId`
+  - `issueLink` / `incidentLink`
+- Restrict lookup scope to account `1679802` only
+- Always exclude muted alerts (supports boolean/numeric/string muted representations)
+- For `NrAiIncident`, open detection uses: `muted = false AND (closeTime IS NULL OR closeTime = 0)`
+- For `NrAiIssue`, open-style detection uses event state (`ACTIVATED`/`OPEN`/`CREATED`)
+- Default time window: `SINCE 3 hours ago UNTIL now`
+- `since` is configurable per prompt/method call
 - Ordered by `lastModifiedTime DESC`
 
 Method:
-- `fetch_open_alerts(*, policy_name_contains, priority=None, limit=100, account_ids=None)`
+- `fetch_open_alerts(*, policy_name_starts_with='Digital Operations', priority=None, since='3 hours ago', limit=100, account_ids=None)`
 
 ### 2. Acknowledge Issue
 Acknowledge an issue by `issueId`.
 
 Behavior:
-- Uses configured `NEWRELIC_USERNAME` when `username` is not passed
+- Uses NerdGraph mutation `aiIssuesAckIssue(accountId, issueId)`
+- Resolves username from New Relic platform using `NEWRELIC_API_KEY` when `username` is not passed
+- If `issueId` is missing but `incidentId` is present, resolves `issueId` via `NrAiIssue` lookup using `contains(incidentIds, '<incidentId>')`
+- Does not acknowledge directly by `incidentId` with `aiIssuesAckIssue`
 - Returns per-issue success/failure status
 
 Method:
@@ -44,7 +57,7 @@ Method:
 Fetch matching open unacknowledged alerts and acknowledge all of them.
 
 Method:
-- `fetch_and_acknowledge_open_alerts(*, policy_name_contains, priority=None, limit=100, account_ids=None)`
+- `fetch_and_acknowledge_open_alerts(*, policy_name_starts_with='Digital Operations', priority=None, since='3 hours ago', limit=100, account_ids=None)`
 
 Returns summary:
 - alerts found
@@ -58,22 +71,29 @@ Returns summary:
 Use [newrelic_alerts_client.py](newrelic_alerts_client.py).
 
 Core methods:
-- `fetch_open_alerts(*, policy_name_contains, priority=None, limit=100, account_ids=None)`
+- `fetch_open_alerts(*, policy_name_starts_with='Digital Operations', priority=None, since='3 hours ago', limit=100, account_ids=None)`
 - `acknowledge_issue(*, account_id, issue_id, username=None)`
-- `fetch_and_acknowledge_open_alerts(*, policy_name_contains, priority=None, limit=100, account_ids=None)`
+- `fetch_and_acknowledge_open_alerts(*, policy_name_starts_with='Digital Operations', priority=None, since='3 hours ago', limit=100, account_ids=None)`
 
 ## Field Mapping Reference
 
 `NrAiIssue` filters:
-- policy filter: `policyNames LIKE '%<value>%'`
-- muted filter: `muted != 'fullyMuted'`
-- state filter: `event = 'ACTIVATED'`
-- time window: `SINCE 1 hour ago UNTIL now`
+- policy filter: `(policyNames LIKE '<prefix>%' OR policyName LIKE '<prefix>%')`
+- account scope: `1679802` only
+- muted filter: keyset-safe muted exclusion across boolean/numeric/string variants
+- state filter: open-style events (`ACTIVATED`/`OPEN`/`CREATED`)
+- default time window: `SINCE 3 hours ago UNTIL now` (configurable via `since`)
+
+`NrAiIncident` open filters:
+- policy filter: `(policyName LIKE '<prefix>%' OR policyNames LIKE '<prefix>%')`
+- muted filter: `muted = false`
+- open filter: `(closeTime IS NULL OR closeTime = 0)`
 
 ## Validation Standards
 
 - Fail when required env vars are missing
 - Reject empty policy-name filter
 - Reject invalid account IDs
+- Reject account scope outside `1679802`
 - Reject empty issue IDs
-- Reject empty username when both explicit username and configured `NEWRELIC_USERNAME` are missing
+- Fail if platform username cannot be resolved from API key and no explicit username is provided
