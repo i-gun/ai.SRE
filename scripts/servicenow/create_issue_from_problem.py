@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
-ServiceNow Issue Creation from Problem (PRB0040185)
-This script creates an Issue from Problem PRB0040185 and establishes linkage chain:
-INC0039891 -> PRB0040185 -> [New Issue]
+ServiceNow Problem Task (PTASK) creation from a Problem record.
+
+Creates a Problem Task linked to a given PRB number, which corresponds to the
+native 'Create Issue' button on the ServiceNow Problem form.  Records are
+created in /api/now/table/problem_task (PTASK prefix).
+
+For the full INC→PRB→Jira flow, Jira issue creation is handled separately by
+the @Jira agent using the jira-create-issue-from-servicenow-handoff prompt.
 """
 
 import sys
@@ -14,6 +19,7 @@ bootstrap()
 from servicenow_client import ServiceNowClient
 import json
 
+
 def main():
     # Initialize client from .env
     try:
@@ -22,98 +28,69 @@ def main():
     except Exception as e:
         print(f"[FAILED] Failed to initialize ServiceNow client: {str(e)}")
         sys.exit(1)
-    
-    # Step 1: Retrieve problem PRB0040185
+
+    # --- Configure target problem number here ---
+    PROBLEM_NUMBER = "PRB0040185"
+    # Optional: set to Jira project key for cross-system traceability
+    JIRA_PROJECT: str | None = None
+
+    # Step 1: Retrieve problem
     print("\n" + "=" * 80)
-    print("STEP 1: Retrieving Problem PRB0040185")
+    print(f"STEP 1: Retrieving Problem {PROBLEM_NUMBER}")
     print("=" * 80)
     try:
-        problem = client._find_problem(problem_number='PRB0040185', sys_id=None)
+        problem = client._find_problem(problem_number=PROBLEM_NUMBER, sys_id=None)
         print(f"[SUCCESS] Problem Found: {problem.get('number')}")
         print(f"  Short Description: {problem.get('short_description', '[Not Set]')}")
         print(f"  Description: {problem.get('description', '[Not Set]')}")
         print(f"  Category: {problem.get('category', '[Not Set]')}")
         print(f"  Subcategory: {problem.get('subcategory', '[Not Set]')}")
-        print(f"  Service Offering: {problem.get('service_offering', '[Not Set]')}")
         print(f"  Configuration Item: {problem.get('cmdb_ci', '[Not Set]')}")
         print(f"  sys_id: {problem.get('sys_id')}")
     except Exception as e:
         print(f"[FAILED] Error retrieving problem: {str(e)}")
         sys.exit(1)
-    
-    # Step 2: Create Issue from Problem
+
+    # Step 2: Create Problem Task from Problem
     print("\n" + "=" * 80)
-    print("STEP 2: Creating Issue from Problem PRB0040185")
+    print(f"STEP 2: Creating Problem Task (PTASK) from {PROBLEM_NUMBER}")
     print("=" * 80)
     try:
-        # Create issue from problem with derived details and fixed project
-        print("Creating issue from problem with auto-derived details...")
-        
         result = client.create_issue_from_problem(
-            problem_number='PRB0040185'
+            problem_number=PROBLEM_NUMBER,
+            jira_project=JIRA_PROJECT,
         )
-        
-        if result.get('issue'):
-            issue = result['issue']
-            issue_number = issue.get('number')
-            issue_sys_id = issue.get('sys_id')
-            print(f"\n[SUCCESS] Issue Created Successfully")
-            print(f"  Issue Number: {issue_number}")
-            print(f"  Issue sys_id: {issue_sys_id}")
-            print(f"  Project: Digital Delivery")
-            print(f"  Short Description: {issue.get('short_description')}")
-            print(f"  Description: {issue.get('description')}")
+
+        if result.get("problem_task"):
+            ptask = result["problem_task"]
+            ptask_number = ptask.get("number")
+            ptask_sys_id = ptask.get("sys_id")
+            print(f"\n[SUCCESS] Problem Task Created Successfully")
+            print(f"  PTASK Number: {ptask_number}")
+            print(f"  PTASK sys_id: {ptask_sys_id}")
+            print(f"  Problem Task Type: {ptask.get('problem_task_type', '[Not Set]')}")
+            print(f"  Short Description: {ptask.get('short_description')}")
+            print(f"  Jira Project (u_jira_project): {ptask.get('u_jira_project', '[Not Set]')}")
         else:
-            print(f"[FAILED] Failed to create issue")
+            print(f"[FAILED] Failed to create problem task")
             print(f"  Response: {json.dumps(result, indent=2)}")
             sys.exit(1)
     except Exception as e:
-        print(f"[FAILED] Error creating issue: {str(e)}")
+        print(f"[FAILED] Error creating problem task: {str(e)}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
-    
-    # Step 3: Retrieve Incident INC0039891 to verify linkage chain
+
     print("\n" + "=" * 80)
-    print("STEP 3: Verifying Linkage Chain - Incident INC0039891")
+    print("OPERATION REPORT")
     print("=" * 80)
-    try:
-        incident = client._find_incident(incident_number='INC0039891', sys_id=None)
-        print(f"[SUCCESS] Incident Found: {incident.get('number')}")
-        print(f"  Problem Linked (problem_id): {incident.get('problem_id', '[Not Set]')}")
-        print(f"  Short Description: {incident.get('short_description')}")
-        print(f"  State: {incident.get('state')}")
-    except Exception as e:
-        print(f"[FAILED] Error retrieving incident: {str(e)}")
-    
-    # Step 4: Generate comprehensive report
-    print("\n" + "=" * 80)
-    print("COMPREHENSIVE OPERATION REPORT")
-    print("=" * 80)
-    print()
-    print("1. ISSUE CREATION")
-    print(f"   [OK] Issue Number: {issue_number}")
-    print(f"   [OK] Issue sys_id: {issue_sys_id}")
-    print(f"   [OK] Project: Digital Delivery")
-    print(f"   [OK] Summary: {issue.get('short_description')}")
-    print(f"   [OK] Description: {issue.get('description')}")
-    print()
-    print("2. LINKAGE CHAIN")
-    print(f"   Incident -> Problem -> Issue")
-    print(f"   INC0039891 -> PRB0040185 -> {issue_number}")
-    print()
-    print("3. LINKAGE DETAILS")
-    print(f"   * Incident (INC0039891) is linked to Problem (PRB0040185) via problem_id")
-    print(f"   * Problem (PRB0040185) is linked to Issue ({issue_number}) via issue creation")
-    print(f"   * Issue ({issue_number}) contains all problem details with fixed project (Digital Delivery)")
-    print()
-    print("4. STATUS CONFIRMATION")
-    print(f"   [OK] Issue Creation: SUCCESS")
-    print(f"   [OK] Incident Retrieval: SUCCESS")
-    print(f"   [OK] Problem Retrieval: SUCCESS")
-    print(f"   [OK] Linkage Chain Validation: SUCCESS")
-    print()
+    print(f"  Problem   : {PROBLEM_NUMBER} ({problem.get('sys_id')})")
+    print(f"  PTASK     : {ptask_number} ({ptask_sys_id})")
+    print(f"  Linkage   : {PROBLEM_NUMBER} -> {ptask_number} (problem field)")
+    print(f"  Jira Note : Jira issue creation is a separate step via @Jira agent")
     print("=" * 80)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
+

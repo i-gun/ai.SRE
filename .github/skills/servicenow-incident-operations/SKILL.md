@@ -153,29 +153,42 @@ Validation:
 - Created problem must return `sys_id`
 - Incident linkage update must succeed
 
-### 8. Raise Issue From Problem
-Create an issue from an existing problem.
+### 8. Raise Problem Task (PTASK) From Problem — ServiceNow Side of Issue Chain
+When explicitly requested, create a Problem Task linked to a problem.
+
+> **Architecture note:** ServiceNow's native **"Create Issue"** button on the Problem
+> form writes to `/api/now/table/problem_task` (PTASK records), **not** to
+> `/api/now/table/issue` (that table does not exist on this instance).  The Jira
+> issue for the INC→PRB→Jira flow is created separately by the `@Jira` agent using
+> the `jira-create-issue-from-servicenow-handoff` prompt.
 
 Behavior:
 - Resolve problem by `number` or `sys_id`
-- Create issue record with mandatory field mapping:
-    - `select_project` <- `Digital Delivery`
-- Derive issue summary/details from problem when not explicitly provided
-- Optionally carry forward same-name fields (`category`, `subcategory`, `service_offering`, `cmdb_ci`) when available
+- Create `problem_task` record with required field mapping:
+    - `problem` <- problem `sys_id` (FK linkage)
+    - `short_description` <- derived from problem `short_description`
+    - `description` <- derived from problem `description`
+    - `problem_task_type` <- `General` (default)
+    - `u_jira_project` <- Jira project key when cross-system traceability is required
+- Derive short description / description from problem when not explicitly provided
+- Carry forward same-name fields (`category`, `subcategory`, `cmdb_ci`, `assignment_group`) when available
 
 Validation:
 - Source problem must exist
-- Created issue must return `sys_id`
-- `select_project` must be `Digital Delivery`
+- Created problem_task must return `sys_id`
+- `problem_task_type` must be one of the values supported on this instance (`General`, `Root Cause Analysis`)
 
 ## API Endpoints Used
 
 - `GET /api/now/table/incident`
 - `POST /api/now/table/incident`
 - `PATCH /api/now/table/incident/{sys_id}`
-- `POST /api/now/table/problem`
 - `GET /api/now/table/problem`
-- `POST /api/now/table/issue`
+- `POST /api/now/table/problem`
+- `GET /api/now/table/problem_task`
+- `POST /api/now/table/problem_task`
+
+> `/api/now/table/issue` does **not** exist on this instance and must not be used.
 
 ## Field Set for Listing
 
@@ -217,9 +230,14 @@ Core methods:
 - `add_work_note(...)`
 - `assign_incident(...)`
 - `set_priority_by_matrix(...)`
-- `create_problem_from_incident(...)`
-- `create_issue_from_problem(...)`
+- `create_problem_from_incident(...)` — returns `{problem, incident}`
+- `create_issue_from_problem(...)` — returns `{problem, problem_task}`; creates PTASK in ServiceNow
 - `resolve_incident(...)`
+
+> **Credential loading:** `ServiceNowConfig.from_env()` uses `os.getenv()`.  When
+> loading `.env` with `python-dotenv`, passwords containing a trailing `#` are
+> silently truncated (dotenv treats unquoted `#` as a comment).  Always read `.env`
+> directly (line-by-line split on `=`) or quote the value: `PASSWORD="value#"`.
 
 ## Usage Example
 

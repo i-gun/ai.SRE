@@ -105,7 +105,9 @@ class ServiceNowClient:
 
     INCIDENT_TABLE_PATH = "/api/now/table/incident"
     PROBLEM_TABLE_PATH = "/api/now/table/problem"
-    ISSUE_TABLE_PATH = "/api/now/table/issue"
+    # 'Create Issue' on a Problem form creates a problem_task record (PTASK prefix).
+    # The /api/now/table/issue endpoint does not exist on this instance.
+    PROBLEM_TASK_TABLE_PATH = "/api/now/table/problem_task"
 
     LIST_FIELDS = [
         "sys_id",
@@ -138,6 +140,23 @@ class ServiceNowClient:
         "cmdb_ci",
         "assignment_group",
         "problem_statement",
+        "sys_updated_on",
+    ]
+
+    # Fields returned when creating/reading a problem_task (PTASK) record.
+    PROBLEM_TASK_FIELDS = [
+        "sys_id",
+        "number",
+        "short_description",
+        "description",
+        "problem",
+        "problem_task_type",
+        "state",
+        "priority",
+        "assignment_group",
+        "cmdb_ci",
+        "u_jira_project",
+        "u_jira_ticket_creation_status",
         "sys_updated_on",
     ]
 
@@ -711,8 +730,21 @@ class ServiceNowClient:
         sys_id: Optional[str] = None,
         issue_short_description: Optional[str] = None,
         issue_description: Optional[str] = None,
+        jira_project: Optional[str] = None,
+        problem_task_type: str = "General",
     ) -> Dict[str, Any]:
-        """Create an issue from a problem using fixed project selection rules."""
+        """Create a Problem Task (PTASK) linked to a problem.
+
+        ServiceNow's native 'Create Issue' button on the Problem form creates a
+        problem_task record in /api/now/table/problem_task (PTASK prefix), not
+        /api/now/table/issue (which does not exist on this instance).
+
+        The optional `jira_project` field (u_jira_project) links the PTASK to a
+        downstream Jira project for cross-system traceability.  For INC→PRB→Jira
+        flows the Jira issue is created separately via the @Jira agent using the
+        jira-create-issue-from-servicenow-handoff prompt; this method only manages
+        the ServiceNow side of the chain.
+        """
         problem = self._find_problem(problem_number=problem_number, sys_id=sys_id)
         problem_sys_id = self._extract_reference_value(problem.get("sys_id"))
         if not problem_sys_id:
@@ -723,8 +755,8 @@ class ServiceNowClient:
         problem_desc = self._extract_reference_value(problem.get("description"))
         problem_category = self._extract_reference_value(problem.get("category"))
         problem_subcategory = self._extract_reference_value(problem.get("subcategory"))
-        problem_service_offering = self._extract_reference_value(problem.get("service_offering"))
         problem_configuration_item = self._extract_reference_value(problem.get("cmdb_ci"))
+        problem_group = self._extract_reference_value(problem.get("assignment_group"))
 
         issue_short = (issue_short_description or "").strip()
         if not issue_short:
@@ -736,38 +768,41 @@ class ServiceNowClient:
         if not issue_desc:
             issue_desc = problem_desc or "Raised from linked problem record."
 
-        issue_payload: Dict[str, Any] = {
+        task_payload: Dict[str, Any] = {
             "short_description": issue_short,
             "description": issue_desc,
-            "select_project": "Digital Delivery",
             "problem": problem_sys_id,
+            "problem_task_type": problem_task_type,
         }
         if problem_category:
-            issue_payload["category"] = problem_category
+            task_payload["category"] = problem_category
         if problem_subcategory:
-            issue_payload["subcategory"] = problem_subcategory
-        if problem_service_offering:
-            issue_payload["service_offering"] = problem_service_offering
+            task_payload["subcategory"] = problem_subcategory
         if problem_configuration_item:
-            issue_payload["cmdb_ci"] = problem_configuration_item
+            task_payload["cmdb_ci"] = problem_configuration_item
+        if problem_group:
+            task_payload["assignment_group"] = problem_group
+        if jira_project and jira_project.strip():
+            task_payload["u_jira_project"] = jira_project.strip()
 
         result = self._request(
             "POST",
-            self.ISSUE_TABLE_PATH,
-            json=issue_payload,
+            self.PROBLEM_TASK_TABLE_PATH,
+            json=task_payload,
             params={
                 "sysparm_display_value": "true",
                 "sysparm_exclude_reference_link": "true",
+                "sysparm_fields": ",".join(self.PROBLEM_TASK_FIELDS),
             },
         )
 
-        created_issue = result.get("result", {})
-        if not self._extract_reference_value(created_issue.get("sys_id")):
-            raise ServiceNowValidationError("Created issue does not have sys_id")
+        created_task = result.get("result", {})
+        if not self._extract_reference_value(created_task.get("sys_id")):
+            raise ServiceNowValidationError("Created problem task does not have sys_id")
 
         return {
             "problem": problem,
-            "issue": created_issue,
+            "problem_task": created_task,
         }
 
     def add_work_note(

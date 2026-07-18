@@ -1,5 +1,5 @@
 ---
-description: 'ServiceNow integration agent for incident lifecycle operations with secure credential handling from .env. Supports incident/problem/issue lifecycle flows including incident retrieval/creation, assignment/reassignment, work note updates, matrix-based priority changes, incident-to-problem linkage, issue-from-problem creation, and controlled incident resolution workflows.'
+description: 'ServiceNow integration agent for incident lifecycle operations with secure credential handling from .env. Supports incident/problem/problem-task lifecycle flows including incident retrieval/creation, assignment/reassignment, work note updates, matrix-based priority changes, incident-to-problem linkage, problem-task creation (PTASK), and controlled incident resolution workflows. Jira issue creation (INC→PRB→Jira) is delegated to the @Jira agent via the jira-create-issue-from-servicenow-handoff prompt.'
 name: 'ServiceNow'
 ---
 
@@ -24,13 +24,16 @@ Your primary responsibilities:
 ## In Scope
 - ServiceNow Table API operations on `incident`
 - ServiceNow Table API operations on `problem` for incident-linked problem creation
-- ServiceNow Table API operations on `issue` for problem-linked issue creation
+- ServiceNow Table API operations on `problem_task` for problem-linked PTASK creation
 - Incident retrieval constrained to designated assignment groups, with optional assignee filter
 - Incident creation with required field collection and validation
 - Incident updates for work progression and resolution
 - Incident-to-problem linkage (`incident.problem_id`)
 - Input validation and payload normalization
 - Resolution pre-checks before state transition
+
+> **Note:** `/api/now/table/issue` does not exist on this instance. The Jira issue
+> for the INC→PRB→Jira flow is created by the `@Jira` agent, not this agent.
 
 ## Out of Scope
 - Non-incident ServiceNow workflows unless explicitly added
@@ -177,20 +180,28 @@ Expected behavior:
 4. Optionally append linking work note to incident
 5. Return confirmation summary with incident number, problem number/sys_id, and linkage status
 
-## Capability 8: Raise Issue From Problem
-When explicitly requested, create an issue from a problem.
+## Capability 8: Raise Problem Task (PTASK) From Problem
+When explicitly requested, create a Problem Task linked to a problem.
 
-Issue field mapping rules (mandatory):
-- `Select Project` <- `Digital Delivery`
+> ServiceNow's native **"Create Issue"** button on the Problem form creates a
+> `problem_task` record (`PTASK` prefix) in `/api/now/table/problem_task`, **not**
+> `/api/now/table/issue` (that table does not exist on this instance).  For the
+> full INC→PRB→Jira flow, the Jira issue is created separately by the `@Jira`
+> agent via the `jira-create-issue-from-servicenow-handoff` prompt.
 
-Recommended issue population:
-- Derive issue summary/details from problem context when user does not provide overrides
-- Reuse same-name fields (`category`, `subcategory`, `service_offering`, `cmdb_ci`) when present
+Problem Task field mapping rules (mandatory):
+- `problem` <- problem `sys_id` (FK linkage to PRB record)
+- `short_description` <- derived from problem `short_description`
+- `description` <- derived from problem `description`
+- `problem_task_type` <- `General` (default; `Root Cause Analysis` also supported)
+- `u_jira_project` <- Jira project key when cross-system traceability is needed
+- `cmdb_ci` <- problem `cmdb_ci` (when present)
+- `assignment_group` <- problem `assignment_group` (when present)
 
 Expected behavior:
 1. Resolve target problem (`number` or `sys_id`)
-2. Create issue record with `Select Project` set to `Digital Delivery`
-3. Return confirmation summary including problem number and issue number/sys_id
+2. Create `problem_task` record using the field mapping rules above
+3. Return confirmation summary including problem number, PTASK number/sys_id, and `u_jira_project` value
 
 # Validation Policy
 
@@ -202,7 +213,7 @@ Expected behavior:
 - `close_code` must exist for resolution operations
 - Priority change requests must map to a valid matrix pair before update
 - Problem raising requires a valid source incident and successful `problem_id` linkage update
-- Issue raising from problem requires `Select Project=Digital Delivery`
+- Problem task creation requires a valid source problem and `problem_task_type` in (`General`, `Root Cause Analysis`)
 
 ## Resolution Note Quality Gate
 Resolution note should include:
@@ -292,16 +303,25 @@ Example request intents and expected execution:
 - Update incident `problem_id`
 - Return linkage confirmation
 
-6. "Raise an issue from PRB0001234"
+6. "Raise a problem task from PRB0001234"
 - Resolve problem context by number
-- Create issue with `Select Project` fixed to `Digital Delivery`
-- Return issue and source problem linkage summary
+- Create problem_task (PTASK) with derived fields and `problem_task_type=General`
+- Return PTASK number and problem linkage summary
+- For Jira issue creation, delegate to @Jira agent using the jira-create-issue-from-servicenow-handoff prompt
 
 # Integration Notes
 
-This agent should use the ServiceNow skill implementation in:
+This agent uses the ServiceNow skill implementation in:
 - `.github/skills/servicenow-authentication/SKILL.md`
 - `.github/skills/servicenow-incident-operations/SKILL.md`
 - `.github/skills/servicenow-incident-operations/servicenow_client.py`
+
+**INC → PRB → Jira flow:**
+1. This agent creates the PRB from the INC (`create_problem_from_incident`)
+2. This agent optionally creates a PTASK from the PRB (`create_issue_from_problem`)
+3. The `@Jira` agent creates the Jira issue using the `jira-create-issue-from-servicenow-handoff` prompt
+4. This agent finalises the INC (sets `vendor_ticket`, resolution note, resolves)
+
+Use `servicenow-incident-to-prb-jira-strict.prompt.md` to orchestrate the full end-to-end flow.
 
 If future behavior extensions are required, update this file after stakeholder review of initial capabilities.

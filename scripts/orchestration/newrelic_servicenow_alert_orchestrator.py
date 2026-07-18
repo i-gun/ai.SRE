@@ -13,13 +13,32 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from dotenv import load_dotenv
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 NEWRELIC_ALERT_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "newrelic-alert-operations"
 SERVICENOW_INCIDENT_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "servicenow-incident-operations"
 ASSIGNMENT_PROMPT_PATH = PROJECT_ROOT / ".github" / "prompts" / "servicenow-assign-unassigned-incidents.prompt.md"
+
+
+def _load_env_raw(env_path: Path) -> None:
+    """Load .env without python-dotenv to preserve special characters."""
+    if not env_path.exists():
+        return
+
+    with env_path.open() as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if (value.startswith('"') and value.endswith('"')) or (
+                value.startswith("'") and value.endswith("'")
+            ):
+                value = value[1:-1]
+            os.environ[key] = value
 
 
 @dataclass
@@ -42,8 +61,7 @@ class OrchestratorConfig:
 def bootstrap() -> Path:
     """Load .env and register skill import paths."""
     env_path = PROJECT_ROOT / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
+    _load_env_raw(env_path)
 
     for skill_path in (NEWRELIC_ALERT_SKILL_PATH, SERVICENOW_INCIDENT_SKILL_PATH):
         path_str = str(skill_path)
@@ -105,6 +123,11 @@ def _matching_tokens(value: str) -> List[str]:
 
 def _strip_quotes(value: str) -> str:
     return str(value or "").replace("'", "").replace('"', "").strip()
+
+
+def _normalize_prefix_search_text(value: str) -> str:
+    """Prepare alert title for STARTSWITH lookup in ServiceNow."""
+    return " ".join(_strip_quotes(value).split())
 
 
 def _lookup_anchor(value: str) -> str:
@@ -283,14 +306,15 @@ class AlertToIncidentOrchestrator:
     ) -> str:
         current_time = now or datetime.now()
         window_start = current_time - _parse_since_to_timedelta(self.config.since)
-        query_title = _escape_query_value(_strip_quotes(alert_title))
+        prefix_title = _escape_query_value(_normalize_prefix_search_text(alert_title))
         query_anchor = _escape_query_value(_lookup_anchor(alert_title))
+        prefix_expression = prefix_title or query_anchor
         return "^".join(
             [
                 self._build_designated_group_clause(),
                 f"sys_created_on>={_format_servicenow_datetime(window_start)}",
                 f"sys_created_on<={_format_servicenow_datetime(current_time)}",
-                f"short_descriptionLIKE{query_anchor or query_title[:80]}",
+                f"short_descriptionSTARTSWITH{prefix_expression}",
             ]
         )
 

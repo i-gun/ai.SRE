@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-Diagnostic script to check available tables and Issue Management configuration
+Diagnostic script to verify problem_task (PTASK) table access and confirm
+that /api/now/table/issue does not exist on this instance.
+
+Use this to validate connectivity before running create_issue_from_problem.py.
 """
 
 import sys
@@ -19,65 +22,35 @@ def main():
     except Exception as e:
         print(f"[FAILED] Failed to initialize: {str(e)}")
         sys.exit(1)
-    
-    # Try to access issue table with a test query
-    print("\nDiagnostics: Testing Issue Table Access")
+
+    print("\nDiagnostics: Problem Task Table Access")
     print("=" * 80)
-    
-    test_paths = [
-        "/api/now/table/issue",
-        "/api/now/table/u_issue",
-        "/api/now/table/pm_issue",
-        "/api/now/table/problem",
+
+    test_cases = [
+        ("/api/now/table/problem_task", "PTASK backing table for 'Create Issue' button"),
+        ("/api/now/table/problem",      "Problem table"),
+        ("/api/now/table/incident",     "Incident table"),
+        ("/api/now/table/issue",        "(expected NOT FOUND on this instance)"),
     ]
-    
-    for path in test_paths:
+
+    for path, label in test_cases:
         try:
-            print(f"\nTesting path: {path}")
             result = client._request(
                 "GET",
                 path,
-                params={
-                    "sysparm_limit": 1,
-                    "sysparm_exclude_reference_link": "true",
-                }
+                params={"sysparm_limit": 1, "sysparm_exclude_reference_link": "true"},
             )
-            print(f"  [OK] Table accessible - returned {len(result.get('result', []))} records")
+            count = len(result.get("result", []))
+            print(f"  [OK ]  {path:<45s}  {label}  ({count} record(s))")
         except Exception as e:
-            error_msg = str(e)
-            if "Invalid table" in error_msg:
-                print(f"  [TABLE NOT FOUND] {error_msg}")
-            else:
-                print(f"  [ERROR] {error_msg}")
-    
-    # Check ServiceNow system info if available
-    print("\n" + "=" * 80)
-    print("Checking ServiceNow instance info...")
-    print("=" * 80)
-    
-    try:
-        result = client._request(
-            "GET",
-            "/api/now/table/sys_properties",
-            params={
-                "sysparm_query": "nameLIKEissue",
-                "sysparm_limit": 10,
-            }
-        )
-        props = result.get('result', [])
-        if props:
-            print(f"\nFound {len(props)} properties related to 'issue':")
-            for prop in props:
-                print(f"  - {prop.get('name')}: {prop.get('value', '[No value]')}")
-        else:
-            print("No properties found related to 'issue'")
-    except Exception as e:
-        print(f"Could not retrieve system properties: {str(e)}")
-    
-    print("\n" + "=" * 80)
-    print("Note: The 'issue' table may require the Issue Management module.")
-    print("If not installed, consider using alternative tables or configurations.")
-    print("=" * 80)
+            err = str(e)
+            tag = "[TABLE NOT FOUND]" if "Invalid table" in err else "[ERROR]"
+            print(f"  {tag}  {path:<45s}  {err[:80]}")
+
+
+if __name__ == "__main__":
+    main()
+
 
 if __name__ == '__main__':
     main()
