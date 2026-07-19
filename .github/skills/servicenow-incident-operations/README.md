@@ -10,7 +10,7 @@ This skill enables secure ServiceNow incident operations from the local project 
 - Add work notes to incidents
 - Change priority via impact/urgency matrix (do not patch priority directly)
 - Raise problem (PRB) from incident and link records
-- Raise issue from problem with fixed project selection
+- Raise issue from problem via ServiceNow PTASK first, with Jira fallback if needed
 - Resolve incidents with validation gates
 - Apply minimal controlled updates to operational fields
 

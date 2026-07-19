@@ -1,29 +1,31 @@
-# ServiceNow Prompt: Finalize Incident From Jira Result
+# ServiceNow Prompt: Finalize Incident From Issue Result
 
-Use this prompt with the ServiceNow agent after Jira issue creation is completed.
+Use this prompt with the ServiceNow agent after issue creation is completed (ServiceNow PTASK preferred, Jira fallback).
 
 ```text
-@ServiceNow, finalize incident <INC_NUMBER> using Jira result and close workflow strictly.
+@ServiceNow, finalize incident <INC_NUMBER> using issue result and close workflow strictly.
 
 INPUT CONTRACT:
 - incident_number
 - problem_number
-- issue_key
-- issue_url
-- jira_status
+- issue_source (servicenow_problem_task | jira_fallback)
+- issue_number_or_key
+- issue_url (optional for PTASK)
+- issue_status
 
 STRICT EXECUTION POLICY:
 
 1) Validate required inputs:
-   - incident_number, problem_number, issue_key are required
-   - jira_status must be success or partial_success; if failed, do not resolve incident
+   - incident_number, problem_number, issue_number_or_key are required
+   - issue_status must be success or partial_success; if failed, do not resolve incident
 
-2) Backpropagate Jira issue:
-   - Set incident field Vendor Ticket = <issue_key>
+2) Backpropagate issue:
+   - Set incident field Vendor Ticket = <issue_number_or_key>
 
 3) Add resolution notes:
-   - State that problem <problem_number> and issue <issue_key> were raised for RCA and mitigation
-   - Include issue URL
+   - If issue_source=servicenow_problem_task, state problem <problem_number> and PTASK <issue_number_or_key> were raised
+   - If issue_source=jira_fallback, state problem <problem_number> and Jira issue <issue_number_or_key> were raised
+   - Include issue URL when available
    - Include that downstream remediation ownership has been transferred to proper teams
 
 4) Resolve incident:
@@ -40,4 +42,4 @@ STRICT EXECUTION POLICY:
 ```
 
 Example:
-`@ServiceNow, finalize incident INC0044438 using Jira result and close workflow strictly.`
+`@ServiceNow, finalize incident INC0044438 using issue result and close workflow strictly.`

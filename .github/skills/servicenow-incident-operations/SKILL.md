@@ -1,6 +1,6 @@
 ---
 name: 'servicenow-incident-operations'
-description: 'ServiceNow incident operations skill for scoped incident/problem/issue lifecycle flows including incident retrieval/creation, assignment/reassignment, work-note updates, matrix-based priority changes, incident-to-problem linkage, issue-from-problem creation, and controlled resolution with strict validation using .env-based username/password/host authentication.'
+description: 'ServiceNow incident operations skill for scoped incident/problem/issue lifecycle flows including incident retrieval/creation, assignment/reassignment, work-note updates, matrix-based priority changes, incident-to-problem linkage, issue-from-problem creation, and controlled resolution with strict validation using .env-based username/password/host authentication. In INC→PRB→Issue flows, ServiceNow PTASK creation is preferred and Jira delegation is fallback-only.'
 keywords: ['servicenow', 'incident', 'itsm', 'work_notes', 'resolution', 'table-api']
 ---
 
@@ -158,9 +158,10 @@ When explicitly requested, create a Problem Task linked to a problem.
 
 > **Architecture note:** ServiceNow's native **"Create Issue"** button on the Problem
 > form writes to `/api/now/table/problem_task` (PTASK records), **not** to
-> `/api/now/table/issue` (that table does not exist on this instance).  The Jira
-> issue for the INC→PRB→Jira flow is created separately by the `@Jira` agent using
-> the `jira-create-issue-from-servicenow-handoff` prompt.
+> `/api/now/table/issue` (that table does not exist on this instance). For
+> INC→PRB→Issue flows, create PTASK first. Use the `@Jira` agent with
+> `jira-create-issue-from-servicenow-handoff` only as fallback when PTASK creation
+> is unavailable or fails.
 
 Behavior:
 - Resolve problem by `number` or `sys_id`

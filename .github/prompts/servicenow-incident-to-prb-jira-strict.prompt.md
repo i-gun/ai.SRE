@@ -1,9 +1,9 @@
-# ServiceNow Prompt: Strict Incident to Problem to Jira Flow
+# ServiceNow Prompt: Strict Incident to Problem to Issue Flow (ServiceNow-First)
 
-Use this prompt with the ServiceNow agent to run a deterministic incident enrichment, problem creation, Jira delegation, and incident resolution flow.
+Use this prompt with the ServiceNow agent to run a deterministic incident enrichment, fresh problem creation, ServiceNow-first issue creation, optional Jira fallback, and incident resolution flow.
 
 ```text
-@ServiceNow, process incident <INC_NUMBER> with requested priority <TARGET_PRIORITY> and execute strict incident -> problem -> Jira flow.
+@ServiceNow, process incident <INC_NUMBER> with requested priority <TARGET_PRIORITY> and execute strict incident -> problem -> issue flow (ServiceNow-first, Jira fallback).
 
 STRICT EXECUTION POLICY (must follow in order):
 
@@ -43,14 +43,13 @@ STRICT EXECUTION POLICY (must follow in order):
      - update impact and urgency by matrix (do NOT patch priority directly)
    - Re-fetch incident and store final incident priority for downstream routing
 
-6) Ensure one PRB only (idempotency):
-   - If incident already has problem_id, reuse linked problem
-   - Else search problem where origin_task == incident number
-   - If found, reuse latest matching problem
-   - Else create one problem only
-   - Never create multiple PRBs for same incident in a single run
+6) Always create a NEW PRB from incident:
+   - Do NOT reuse incident.problem_id
+   - Do NOT search by origin_task
+   - Always create a fresh problem record from current incident state and notes/comments
+   - Link incident.problem_id to the newly created PRB sys_id
 
-7) Problem field requirements (on create or reconcile):
+7) Problem field requirements (on create):
    - Origin task = <Incident_Number> (required)
    - Category = <Incident_Category> (required)
    - Subcategory = <Incident_Subcategory> (required)
@@ -61,16 +60,22 @@ STRICT EXECUTION POLICY (must follow in order):
    - Description = <Incident_Description> (required)
    - Backpropagate problem number to incident field Problem
 
-8) Delegate issue creation to @Jira:
+8) Preferred issue creation route = ServiceNow "Create Issue" behavior:
+   - First, create a `problem_task` (PTASK) from the created PRB via ServiceNow (`/api/now/table/problem_task`)
    - Route by final incident priority:
-     - P3 -> DDL (Digital Delivery)
-     - P4 or P5 -> ODPT (One Digital Platform)
-     - P1 or P2 -> ask explicit routing confirmation before delegation
-   - Send incident and problem context to Jira using handoff contract prompt
+     - P3 -> set `u_jira_project` to DDL (Digital Delivery)
+     - P4 or P5 -> set `u_jira_project` to ODPT (One Digital Platform)
+     - P1 or P2 -> ask explicit routing confirmation before setting `u_jira_project`
+   - Verify PTASK creation returns number and sys_id
+   - Only if PTASK creation is blocked/fails (capability, ACL, validation, or platform error), fallback to @Jira using handoff contract prompt
 
-9) After Jira result returns (issue key + url):
-   - Set incident Vendor Ticket = <ISSUE_KEY>
-   - Add resolution note that PRB <PRB_NUMBER> and issue <ISSUE_KEY> were raised for RCA and mitigation, include issue URL
+9) After issue creation succeeds:
+   - If ServiceNow PTASK succeeded:
+     - Set incident Vendor Ticket = <PTASK_NUMBER>
+     - Add resolution note that PRB <PRB_NUMBER> and PTASK <PTASK_NUMBER> were raised for RCA and mitigation
+   - If Jira fallback succeeded:
+     - Set incident Vendor Ticket = <ISSUE_KEY>
+     - Add resolution note that PRB <PRB_NUMBER> and Jira issue <ISSUE_KEY> were raised for RCA and mitigation, include issue URL
    - Set State = Resolved
    - Set Resolution code = Fixed
    - Resolve incident
@@ -82,14 +87,18 @@ STRICT EXECUTION POLICY (must follow in order):
    - incident:
      - number, final_priority, state, vendor_ticket, status
    - problem:
-     - number, reused_or_created, status
+     - number, created_mode, status
    - issue:
-     - key, project, url, status
+     - route_used (servicenow_problem_task | jira_fallback)
+     - number_or_key
+     - project
+     - url
+     - status
    - overall_status: success | partial_success | skipped | failed
    - failure_reason (if not success)
 
 11) Failure guardrails:
-   - Never resolve incident if Jira issue creation failed
+   - Never resolve incident if both issue routes fail (ServiceNow PTASK + Jira fallback)
    - Never silently skip required fields; fail with explicit step and reason
    - If custom/target fields are unavailable, return partial_success or failed with precise diagnostics
 
@@ -97,4 +106,4 @@ Do not use Confluence or any external knowledge source for this operation.
 ```
 
 Example:
-`@ServiceNow, process incident INC0044438 with requested priority P3 and execute strict incident -> problem -> Jira flow.`
+`@ServiceNow, process incident INC0044438 with requested priority P3 and execute strict incident -> problem -> issue flow (ServiceNow-first, Jira fallback).`

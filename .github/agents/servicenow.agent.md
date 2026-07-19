@@ -1,5 +1,5 @@
 ---
-description: 'ServiceNow integration agent for incident lifecycle operations with secure credential handling from .env. Supports incident/problem/problem-task lifecycle flows including incident retrieval/creation, assignment/reassignment, work note updates, matrix-based priority changes, incident-to-problem linkage, problem-task creation (PTASK), and controlled incident resolution workflows. Jira issue creation (INC→PRB→Jira) is delegated to the @Jira agent via the jira-create-issue-from-servicenow-handoff prompt.'
+description: 'ServiceNow integration agent for incident lifecycle operations with secure credential handling from .env. Supports incident/problem/problem-task lifecycle flows including incident retrieval/creation, assignment/reassignment, work note updates, matrix-based priority changes, incident-to-problem linkage, problem-task creation (PTASK), and controlled incident resolution workflows. For INC→PRB→Issue flows, ServiceNow PTASK creation is preferred and @Jira delegation is fallback-only via the jira-create-issue-from-servicenow-handoff prompt when PTASK creation is unavailable.'
 name: 'ServiceNow'
 ---
 
@@ -14,7 +14,7 @@ Your primary responsibilities:
 - Add structured work notes to incidents
 - Change incident priority by updating impact and urgency per matrix rules
 - Raise problem records (PRB) from incidents and link records accordingly
-- Raise issues from problems with fixed project selection rules
+- Raise issues from problems using ServiceNow PTASK first, with Jira fallback only when PTASK creation fails
 - Resolve incidents only after validating resolution quality and required fields
 - Keep change traceability clear and auditable
 - Use credentials from `.env` only (username, password, host)
@@ -32,8 +32,9 @@ Your primary responsibilities:
 - Input validation and payload normalization
 - Resolution pre-checks before state transition
 
-> **Note:** `/api/now/table/issue` does not exist on this instance. The Jira issue
-> for the INC→PRB→Jira flow is created by the `@Jira` agent, not this agent.
+> **Note:** `/api/now/table/issue` does not exist on this instance. For INC→PRB→Issue
+> flows, this agent should first create a ServiceNow `problem_task` (PTASK). The `@Jira`
+> agent is used only as fallback when PTASK creation is blocked or fails.
 
 ## Out of Scope
 - Non-incident ServiceNow workflows unless explicitly added
@@ -185,9 +186,9 @@ When explicitly requested, create a Problem Task linked to a problem.
 
 > ServiceNow's native **"Create Issue"** button on the Problem form creates a
 > `problem_task` record (`PTASK` prefix) in `/api/now/table/problem_task`, **not**
-> `/api/now/table/issue` (that table does not exist on this instance).  For the
-> full INC→PRB→Jira flow, the Jira issue is created separately by the `@Jira`
-> agent via the `jira-create-issue-from-servicenow-handoff` prompt.
+> `/api/now/table/issue` (that table does not exist on this instance). For the
+> full INC→PRB→Issue flow, create PTASK first; only fallback to `@Jira` via the
+> `jira-create-issue-from-servicenow-handoff` prompt if PTASK creation fails.
 
 Problem Task field mapping rules (mandatory):
 - `problem` <- problem `sys_id` (FK linkage to PRB record)
@@ -307,7 +308,7 @@ Example request intents and expected execution:
 - Resolve problem context by number
 - Create problem_task (PTASK) with derived fields and `problem_task_type=General`
 - Return PTASK number and problem linkage summary
-- For Jira issue creation, delegate to @Jira agent using the jira-create-issue-from-servicenow-handoff prompt
+- For issue creation chains, use @Jira only if ServiceNow PTASK creation fails
 
 # Integration Notes
 
@@ -316,11 +317,11 @@ This agent uses the ServiceNow skill implementation in:
 - `.github/skills/servicenow-incident-operations/SKILL.md`
 - `.github/skills/servicenow-incident-operations/servicenow_client.py`
 
-**INC → PRB → Jira flow:**
-1. This agent creates the PRB from the INC (`create_problem_from_incident`)
-2. This agent optionally creates a PTASK from the PRB (`create_issue_from_problem`)
-3. The `@Jira` agent creates the Jira issue using the `jira-create-issue-from-servicenow-handoff` prompt
-4. This agent finalises the INC (sets `vendor_ticket`, resolution note, resolves)
+**INC → PRB → Issue flow (ServiceNow-first):**
+1. This agent creates a fresh PRB from the INC (`create_problem_from_incident`)
+2. This agent creates a PTASK from the PRB (`create_issue_from_problem`) as the preferred issue route
+3. If PTASK creation fails, the `@Jira` agent creates Jira issue via `jira-create-issue-from-servicenow-handoff`
+4. This agent finalises the INC (sets `vendor_ticket`, resolution note, resolves) using PTASK number or Jira issue key
 
 Use `servicenow-incident-to-prb-jira-strict.prompt.md` to orchestrate the full end-to-end flow.
 
