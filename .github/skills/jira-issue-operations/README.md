@@ -44,10 +44,10 @@ issue = client.get_issue("ODP-123")
 
 created = client.create_issue(
     project_key="ODP",
-    issue_type="Task",
-    summary="Validate release readiness for dashboard migration",
-    description="Confirm dashboard widgets, filters, and permissions before release.",
-    labels=["release", "migration"],
+    issue_type="Problem",
+    summary="Recurring account pending verification errors during bot activity",
+    description="Create problem-level Jira tracking from ServiceNow escalation handoff.",
+    labels=["servicenow", "escalation"],
 )
 
 client.update_issue(
@@ -72,3 +72,4 @@ client.link_issues(
 - Jira Cloud basic auth uses `JIRA_USERNAME` and `JIRA_API_TOKEN`
 - Keep `.env` local and use `.env.example` only for sanitized examples
 - Dashboards are treated as read-only discovery resources in this skill
+- Issue creation performs project issue-type preflight by default and fails fast if the requested issue type is unavailable

@@ -132,6 +132,13 @@ class TestCreateIssueValidation(unittest.TestCase):
             return_value=return_value or {"id": "10001", "key": "TEST-1"},
         )
 
+    def _patch_issue_type_preflight(self, issue_types=None):
+        return patch.object(
+            self.client,
+            "get_project_issue_types",
+            return_value=issue_types or ["Bug", "Task", "Problem"],
+        )
+
     def test_raises_when_project_key_empty(self):
         with self._patch_request():
             with self.assertRaises(JiraValidationError):
@@ -160,12 +167,13 @@ class TestCreateIssueValidation(unittest.TestCase):
                 )
 
     def test_calls_request_with_correct_fields(self):
-        with self._patch_request() as mock_req:
-            self.client.create_issue(
-                project_key="TEST",
-                issue_type="Bug",
-                summary="Something broke",
-            )
+        with self._patch_issue_type_preflight():
+            with self._patch_request() as mock_req:
+                self.client.create_issue(
+                    project_key="TEST",
+                    issue_type="Bug",
+                    summary="Something broke",
+                )
         _, kwargs = mock_req.call_args
         fields = kwargs["json"]["fields"]
         self.assertEqual(fields["project"], {"key": "TEST"})
@@ -173,17 +181,18 @@ class TestCreateIssueValidation(unittest.TestCase):
         self.assertEqual(fields["summary"], "Something broke")
 
     def test_optional_fields_included_when_provided(self):
-        with self._patch_request() as mock_req:
-            self.client.create_issue(
-                project_key="TEST",
-                issue_type="Story",
-                summary="New feature",
-                description="Full description here",
-                assignee="user123",
-                priority="High",
-                labels=["backend", "urgent"],
-                components=["API"],
-            )
+        with self._patch_issue_type_preflight(issue_types=["Story", "Problem"]):
+            with self._patch_request() as mock_req:
+                self.client.create_issue(
+                    project_key="TEST",
+                    issue_type="Story",
+                    summary="New feature",
+                    description="Full description here",
+                    assignee="user123",
+                    priority="High",
+                    labels=["backend", "urgent"],
+                    components=["API"],
+                )
         _, kwargs = mock_req.call_args
         fields = kwargs["json"]["fields"]
         self.assertIn("description", fields)
@@ -191,6 +200,54 @@ class TestCreateIssueValidation(unittest.TestCase):
         self.assertEqual(fields["priority"], {"name": "High"})
         self.assertIn("backend", fields["labels"])
         self.assertEqual(fields["components"], [{"name": "API"}])
+
+    def test_preflight_rejects_unavailable_issue_type(self):
+        with self._patch_issue_type_preflight(issue_types=["Bug", "Task"]):
+            with self.assertRaises(JiraValidationError):
+                self.client.create_issue(
+                    project_key="TEST",
+                    issue_type="Problem",
+                    summary="Escalation should fail fast",
+                )
+
+    def test_can_skip_preflight_when_explicitly_disabled(self):
+        with self._patch_request() as mock_req:
+            self.client.create_issue(
+                project_key="TEST",
+                issue_type="Problem",
+                summary="Skip preflight by policy override",
+                verify_issue_type_available=False,
+            )
+        mock_req.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# TestIssueTypePreflight
+# ---------------------------------------------------------------------------
+
+class TestIssueTypePreflight(unittest.TestCase):
+
+    def setUp(self):
+        self.client = _make_client()
+
+    def test_get_project_issue_types_from_list_payload(self):
+        payload = [
+            {"name": "Bug"},
+            {"name": "Problem"},
+            {"name": "Problem"},
+        ]
+        with patch.object(self.client, "_request", return_value=payload):
+            issue_types = self.client.get_project_issue_types(project_key="DDL")
+        self.assertEqual(issue_types, ["Bug", "Problem"])
+
+    def test_ensure_issue_type_available_passes_on_case_insensitive_match(self):
+        with patch.object(self.client, "get_project_issue_types", return_value=["Problem", "Task"]):
+            self.client.ensure_issue_type_available(project_key="DDL", issue_type="problem")
+
+    def test_ensure_issue_type_available_raises_when_missing(self):
+        with patch.object(self.client, "get_project_issue_types", return_value=["Task", "Bug"]):
+            with self.assertRaises(JiraValidationError):
+                self.client.ensure_issue_type_available(project_key="DDL", issue_type="Problem")
 
 
 # ---------------------------------------------------------------------------

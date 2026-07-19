@@ -13,6 +13,9 @@ INPUT CONTRACT (from ServiceNow):
 - incident_summary
 - incident_description
 - routing_project (DDL or ODPT)
+- required_issue_type (must be `Problem` for DDL/ODPT unless explicit override is approved)
+- issue_type_override (optional)
+- issue_type_override_approved (boolean, required when override is provided)
 
 STRICT EXECUTION POLICY:
 
@@ -20,6 +23,12 @@ STRICT EXECUTION POLICY:
    - If routing_project=DDL, create in project DDL
    - If routing_project=ODPT, create in project ODPT
    - If routing_project is missing or invalid, fail with reason
+
+1.1) Validate issue type policy:
+   - For routing_project in {DDL, ODPT}, default required issue type is `Problem`
+   - If issue_type_override is provided, require issue_type_override_approved=true
+   - If approved override is absent, create as `Problem` only
+   - If `Problem` issue type is unavailable in target project, STOP with failed status and diagnostics
 
 2) Resolve custom fields by name before create/update:
    - Banner
@@ -51,11 +60,15 @@ STRICT EXECUTION POLICY:
 
 5) Verify create/update:
    - Re-fetch issue and verify labels and mapped fields
+   - Verify actual Jira issue type equals requested/required issue type
 
 6) Return strict result payload:
    - issue_key
    - issue_url
    - project
+   - issue_type_requested
+   - issue_type_created
+   - issue_type_verified
    - labels_before
    - labels_after
    - field_mapping_applied (list)

@@ -13,7 +13,10 @@ Return response as strict JSON with these keys:
     "before": {},
     "after": {},
     "applied": [],
-    "missing": []
+    "missing": [],
+    "issue_type_requested": "string|null",
+    "issue_type_created": "string|null",
+    "issue_type_verified": "boolean|null"
   },
   "failure_reason": "string|null",
   "next_action": "string|null"

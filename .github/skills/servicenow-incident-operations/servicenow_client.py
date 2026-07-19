@@ -7,7 +7,8 @@ Capabilities:
 - Update incident work notes and optional operational fields
 - Change priority via impact/urgency matrix mapping
 - Create a problem (PRB) from an incident and link them
-- Create an issue from a problem with fixed project selection
+- Detect native ServiceNow-to-Jira capability from Problem context
+- Route issue creation to native ServiceNow integration or Jira handoff
 - Resolve incidents with resolution note quality validation
 
 Authentication:
@@ -108,6 +109,16 @@ class ServiceNowClient:
     # 'Create Issue' on a Problem form creates a problem_task record (PTASK prefix).
     # The /api/now/table/issue endpoint does not exist on this instance.
     PROBLEM_TASK_TABLE_PATH = "/api/now/table/problem_task"
+    SUPPORTED_ROUTING_PROJECTS = {"DDL", "ODPT"}
+
+    # Common field names observed in ServiceNow Jira integration variants.
+    PROBLEM_JIRA_SIGNAL_FIELDS = [
+        "u_jira_project",
+        "u_jira_ticket",
+        "u_jira_issue_key",
+        "u_jira_issue_url",
+        "u_jira_ticket_creation_status",
+    ]
 
     LIST_FIELDS = [
         "sys_id",
@@ -803,6 +814,249 @@ class ServiceNowClient:
         return {
             "problem": problem,
             "problem_task": created_task,
+        }
+
+    def detect_native_jira_from_problem_capability(
+        self,
+        *,
+        problem_number: Optional[str] = None,
+        sys_id: Optional[str] = None,
+        routing_project: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Detect whether native ServiceNow->Jira path is available for a problem.
+
+        Outcome classes:
+        - available: strong evidence native path is usable now
+        - conditionally_available: integration signals exist but no reliable trigger evidence
+        - unavailable: missing access/signals, use Jira handoff without PTASK creation
+        """
+        problem = self._find_problem(problem_number=problem_number, sys_id=sys_id)
+        normalized_project = (routing_project or "").strip().upper()
+        if normalized_project and normalized_project not in self.SUPPORTED_ROUTING_PROJECTS:
+            raise ServiceNowValidationError(
+                "routing_project must be one of: DDL, ODPT"
+            )
+
+        checks: List[Dict[str, Any]] = []
+        missing_requirements: List[str] = []
+        mode = "unavailable"
+        confidence = "low"
+
+        # Probe Problem Task table using Jira-related fields without creating data.
+        task_probe_ok = False
+        task_probe_result: List[Dict[str, Any]] = []
+        try:
+            response = self._request(
+                "GET",
+                self.PROBLEM_TASK_TABLE_PATH,
+                params={
+                    "sysparm_limit": 1,
+                    "sysparm_display_value": "true",
+                    "sysparm_exclude_reference_link": "true",
+                    "sysparm_fields": ",".join(
+                        [
+                            "number",
+                            "sys_id",
+                            "u_jira_project",
+                            "u_jira_ticket",
+                            "u_jira_issue_key",
+                            "u_jira_issue_url",
+                            "u_jira_ticket_creation_status",
+                            "sys_updated_on",
+                        ]
+                    ),
+                },
+            )
+            task_probe_result = response.get("result", []) or []
+            task_probe_ok = True
+            checks.append(
+                {
+                    "name": "problem_task_table_probe",
+                    "ok": True,
+                    "detail": "problem_task table is readable",
+                }
+            )
+        except Exception as exc:
+            checks.append(
+                {
+                    "name": "problem_task_table_probe",
+                    "ok": False,
+                    "detail": str(exc),
+                }
+            )
+            missing_requirements.append("problem_task_read_access_or_fields")
+
+        jira_signal_present = False
+        existing_native_success = False
+        if task_probe_ok and task_probe_result:
+            sample = task_probe_result[0]
+            jira_signal_present = any(
+                field in sample for field in self.PROBLEM_JIRA_SIGNAL_FIELDS
+            )
+
+            status_value = self._extract_reference_value(
+                sample.get("u_jira_ticket_creation_status")
+            ).lower()
+            ticket_value = self._extract_reference_value(
+                sample.get("u_jira_ticket")
+            ) or self._extract_reference_value(sample.get("u_jira_issue_key"))
+            existing_native_success = bool(ticket_value) and status_value in {
+                "created",
+                "success",
+                "succeeded",
+                "complete",
+                "completed",
+            }
+
+        checks.append(
+            {
+                "name": "jira_signal_fields_present",
+                "ok": jira_signal_present,
+                "detail": "jira integration fields visible on problem_task sample"
+                if jira_signal_present
+                else "jira integration fields were not confirmed from readable sample",
+            }
+        )
+
+        if existing_native_success:
+            mode = "native_via_ptask"
+            confidence = "high"
+            availability = "available"
+            recommended_route = "servicenow_native_jira"
+        elif jira_signal_present:
+            mode = "native_via_ptask"
+            confidence = "medium"
+            availability = "conditionally_available"
+            recommended_route = "jira_agent_delegation"
+        else:
+            availability = "unavailable"
+            recommended_route = "jira_agent_delegation"
+            missing_requirements.append("native_jira_trigger_evidence")
+
+        return {
+            "availability": availability,
+            "mode": mode,
+            "confidence": confidence,
+            "problem_number": self._extract_reference_value(problem.get("number")),
+            "routing_project": normalized_project or None,
+            "checks": checks,
+            "missing_requirements": sorted(set(missing_requirements)),
+            "recommended_route": recommended_route,
+        }
+
+    def create_native_jira_issue_from_problem(
+        self,
+        *,
+        problem_number: Optional[str] = None,
+        sys_id: Optional[str] = None,
+        routing_project: str,
+    ) -> Dict[str, Any]:
+        """Attempt native ServiceNow->Jira creation from Problem context.
+
+        This method only proceeds when capability detection reports "available".
+        Current supported native mode is "native_via_ptask".
+        """
+        capability = self.detect_native_jira_from_problem_capability(
+            problem_number=problem_number,
+            sys_id=sys_id,
+            routing_project=routing_project,
+        )
+        if capability.get("availability") != "available":
+            raise ServiceNowValidationError(
+                "Native ServiceNow->Jira path is not confirmed as available. "
+                "Use Jira delegation instead."
+            )
+
+        if capability.get("mode") != "native_via_ptask":
+            raise ServiceNowValidationError(
+                "No supported native ServiceNow->Jira mode is implemented for this instance."
+            )
+
+        ptask_result = self.create_issue_from_problem(
+            problem_number=problem_number,
+            sys_id=sys_id,
+            jira_project=routing_project,
+        )
+        ptask = ptask_result.get("problem_task", {})
+
+        # Best-effort extraction from common native integration fields.
+        issue_key = self._extract_reference_value(ptask.get("u_jira_ticket")) or \
+            self._extract_reference_value(ptask.get("u_jira_issue_key"))
+        issue_url = self._extract_reference_value(ptask.get("u_jira_issue_url")) or None
+
+        status_value = self._extract_reference_value(
+            ptask.get("u_jira_ticket_creation_status")
+        )
+
+        return {
+            "route_used": "servicenow_native_jira",
+            "native_mode": "native_via_ptask",
+            "problem": ptask_result.get("problem", {}),
+            "problem_task": ptask,
+            "issue_number_or_key": issue_key or self._extract_reference_value(ptask.get("number")),
+            "issue_url": issue_url,
+            "issue_status": status_value or "created",
+            "project": routing_project,
+        }
+
+    def create_issue_from_problem_with_routing(
+        self,
+        *,
+        problem_number: Optional[str] = None,
+        sys_id: Optional[str] = None,
+        routing_project: str,
+        required_issue_type: str = "Problem",
+        allow_jira_agent_fallback: bool = True,
+    ) -> Dict[str, Any]:
+        """Route issue creation to native ServiceNow integration or Jira handoff.
+
+        Policy:
+        - Try native only when explicitly detected as available.
+        - If unavailable/conditional, do not create PTASK as fallback artifact.
+        - Return a structured Jira handoff payload when delegation is required.
+        """
+        normalized_project = (routing_project or "").strip().upper()
+        if normalized_project not in self.SUPPORTED_ROUTING_PROJECTS:
+            raise ServiceNowValidationError(
+                "routing_project must be one of: DDL, ODPT"
+            )
+
+        issue_type = (required_issue_type or "").strip() or "Problem"
+        capability = self.detect_native_jira_from_problem_capability(
+            problem_number=problem_number,
+            sys_id=sys_id,
+            routing_project=normalized_project,
+        )
+
+        if capability.get("availability") == "available":
+            return self.create_native_jira_issue_from_problem(
+                problem_number=problem_number,
+                sys_id=sys_id,
+                routing_project=normalized_project,
+            )
+
+        if not allow_jira_agent_fallback:
+            raise ServiceNowValidationError(
+                "Native ServiceNow->Jira path is not available and Jira fallback is disabled."
+            )
+
+        problem = self._find_problem(problem_number=problem_number, sys_id=sys_id)
+        return {
+            "route_used": "jira_agent_delegation",
+            "status": "handoff_required",
+            "capability": capability,
+            "handoff": {
+                "incident_number": self._extract_reference_value(problem.get("origin_task")),
+                "problem_number": self._extract_reference_value(problem.get("number")),
+                "problem_url": None,
+                "incident_summary": self._extract_reference_value(problem.get("problem_statement"))
+                or self._extract_reference_value(problem.get("short_description")),
+                "incident_description": self._extract_reference_value(problem.get("description")),
+                "routing_project": normalized_project,
+                "required_issue_type": issue_type,
+                "issue_type_policy_source": "route_default",
+            },
+            "next_action": "delegate_to_jira_agent",
         }
 
     def add_work_note(

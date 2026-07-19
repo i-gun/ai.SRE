@@ -10,7 +10,7 @@ This skill enables secure ServiceNow incident operations from the local project 
 - Add work notes to incidents
 - Change priority via impact/urgency matrix (do not patch priority directly)
 - Raise problem (PRB) from incident and link records
-- Raise issue from problem via ServiceNow PTASK first, with Jira fallback if needed
+- Route issue creation from problem using native ServiceNow->Jira when available, with Jira delegation fallback
 - Resolve incidents with validation gates
 - Apply minimal controlled updates to operational fields
 
@@ -72,15 +72,17 @@ linked = client.create_problem_from_incident(
 	work_note="[PRB] Incident linked to problem for root-cause analysis.",
 )
 
-# Raise issue from problem
-issue_linked = client.create_issue_from_problem(
+# Route issue creation from problem
+issue_route = client.create_issue_from_problem_with_routing(
 	problem_number="PRB0038826",
-	issue_short_description="Digital delivery remediation stream",
-	issue_description="Track delivery fixes and rollout tasks for the linked problem.",
+	routing_project="DDL",
+	required_issue_type="Problem",
 )
-```
 
-Issue mapping rule applied during create_issue_from_problem(...):
+Routing policy applied during create_issue_from_problem_with_routing(...):
+- Native ServiceNow->Jira is used only when capability is available.
+- If native path is unavailable/unverified, return Jira handoff payload and delegate.
+- Do not create PTASK as fallback artifact in the unavailable branch.
 - Select Project <- Digital Delivery
 
 PRB mapping rules applied from source incident during create_problem_from_incident(...):

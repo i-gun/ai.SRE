@@ -352,5 +352,103 @@ class TestListIncidentsValidation(unittest.TestCase):
                 self.client.list_incidents(assignment_group="Unlisted Group")
 
 
+# ---------------------------------------------------------------------------
+# TestIssueRoutingFromProblem
+# ---------------------------------------------------------------------------
+
+class TestIssueRoutingFromProblem(unittest.TestCase):
+
+    def setUp(self):
+        self.client = _make_client()
+
+    def test_detect_capability_requires_valid_project(self):
+        with patch.object(self.client, "_find_problem", return_value={"number": "PRB1"}):
+            with self.assertRaises(ServiceNowValidationError):
+                self.client.detect_native_jira_from_problem_capability(
+                    problem_number="PRB1",
+                    routing_project="INVALID",
+                )
+
+    def test_detect_capability_unavailable_when_probe_fails(self):
+        with patch.object(self.client, "_find_problem", return_value={"number": "PRB1"}):
+            with patch.object(
+                self.client,
+                "_request",
+                side_effect=Exception("forbidden"),
+            ):
+                result = self.client.detect_native_jira_from_problem_capability(
+                    problem_number="PRB1",
+                    routing_project="DDL",
+                )
+        self.assertEqual(result["availability"], "unavailable")
+        self.assertEqual(result["recommended_route"], "jira_agent_delegation")
+
+    def test_detect_capability_conditionally_available_with_signals(self):
+        with patch.object(self.client, "_find_problem", return_value={"number": "PRB1"}):
+            with patch.object(
+                self.client,
+                "_request",
+                return_value={
+                    "result": [
+                        {
+                            "number": "PTASK1",
+                            "u_jira_project": "DDL",
+                            "u_jira_ticket_creation_status": "",
+                        }
+                    ]
+                },
+            ):
+                result = self.client.detect_native_jira_from_problem_capability(
+                    problem_number="PRB1",
+                    routing_project="DDL",
+                )
+        self.assertEqual(result["availability"], "conditionally_available")
+
+    def test_create_issue_with_routing_returns_handoff_when_unavailable(self):
+        with patch.object(
+            self.client,
+            "detect_native_jira_from_problem_capability",
+            return_value={
+                "availability": "unavailable",
+                "mode": "unavailable",
+                "recommended_route": "jira_agent_delegation",
+            },
+        ):
+            with patch.object(
+                self.client,
+                "_find_problem",
+                return_value={
+                    "number": "PRB0001",
+                    "origin_task": "INC0001",
+                    "problem_statement": "Short",
+                    "description": "Long",
+                },
+            ):
+                routed = self.client.create_issue_from_problem_with_routing(
+                    problem_number="PRB0001",
+                    routing_project="DDL",
+                )
+        self.assertEqual(routed["route_used"], "jira_agent_delegation")
+        self.assertEqual(routed["handoff"]["required_issue_type"], "Problem")
+
+    def test_create_issue_with_routing_uses_native_when_available(self):
+        with patch.object(
+            self.client,
+            "detect_native_jira_from_problem_capability",
+            return_value={"availability": "available", "mode": "native_via_ptask"},
+        ):
+            with patch.object(
+                self.client,
+                "create_native_jira_issue_from_problem",
+                return_value={"route_used": "servicenow_native_jira", "issue_number_or_key": "DDL-1"},
+            ) as native_call:
+                routed = self.client.create_issue_from_problem_with_routing(
+                    problem_number="PRB0001",
+                    routing_project="DDL",
+                )
+        self.assertEqual(routed["route_used"], "servicenow_native_jira")
+        native_call.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

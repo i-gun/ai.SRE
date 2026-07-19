@@ -1,6 +1,6 @@
 ---
 name: 'servicenow-incident-operations'
-description: 'ServiceNow incident operations skill for scoped incident/problem/issue lifecycle flows including incident retrieval/creation, assignment/reassignment, work-note updates, matrix-based priority changes, incident-to-problem linkage, issue-from-problem creation, and controlled resolution with strict validation using .env-based username/password/host authentication. In INC→PRB→Issue flows, ServiceNow PTASK creation is preferred and Jira delegation is fallback-only.'
+description: 'ServiceNow incident operations skill for scoped incident/problem/issue lifecycle flows including incident retrieval/creation, assignment/reassignment, work-note updates, matrix-based priority changes, incident-to-problem linkage, native ServiceNow->Jira capability detection, and controlled resolution with strict validation using .env-based username/password/host authentication. In INC→PRB→Issue flows, native ServiceNow->Jira is preferred when available; Jira delegation is used when native path is unavailable or unverified, without PTASK fallback artifact creation.'
 keywords: ['servicenow', 'incident', 'itsm', 'work_notes', 'resolution', 'table-api']
 ---
 
@@ -153,31 +153,30 @@ Validation:
 - Created problem must return `sys_id`
 - Incident linkage update must succeed
 
-### 8. Raise Problem Task (PTASK) From Problem — ServiceNow Side of Issue Chain
-When explicitly requested, create a Problem Task linked to a problem.
+### 8. Route Issue Creation From Problem (Native ServiceNow->Jira Preferred)
+When explicitly requested, route issue creation from a problem.
 
-> **Architecture note:** ServiceNow's native **"Create Issue"** button on the Problem
-> form writes to `/api/now/table/problem_task` (PTASK records), **not** to
-> `/api/now/table/issue` (that table does not exist on this instance). For
-> INC→PRB→Issue flows, create PTASK first. Use the `@Jira` agent with
-> `jira-create-issue-from-servicenow-handoff` only as fallback when PTASK creation
-> is unavailable or fails.
+Architecture policy:
+- `/api/now/table/issue` does not exist on this instance.
+- Native ServiceNow->Jira may be represented by integration fields/actions on
+    Problem or Problem Task records.
+- For INC→PRB→Issue flows:
+    1) detect native capability first,
+    2) execute native route only when available,
+    3) otherwise delegate to `@Jira`.
+- Do not create PTASK as fallback artifact in the unavailable branch.
 
 Behavior:
 - Resolve problem by `number` or `sys_id`
-- Create `problem_task` record with required field mapping:
-    - `problem` <- problem `sys_id` (FK linkage)
-    - `short_description` <- derived from problem `short_description`
-    - `description` <- derived from problem `description`
-    - `problem_task_type` <- `General` (default)
-    - `u_jira_project` <- Jira project key when cross-system traceability is required
-- Derive short description / description from problem when not explicitly provided
-- Carry forward same-name fields (`category`, `subcategory`, `cmdb_ci`, `assignment_group`) when available
+- Classify native capability (`available | conditionally_available | unavailable`)
+- If `available`, execute native ServiceNow->Jira route and verify issue identifier
+- If `conditionally_available` or `unavailable`, return Jira handoff payload for `@Jira`
+- Enforce Jira issue type policy in handoff for DDL/ODPT routes: required type is `Problem`
 
 Validation:
 - Source problem must exist
-- Created problem_task must return `sys_id`
-- `problem_task_type` must be one of the values supported on this instance (`General`, `Root Cause Analysis`)
+- Routing project must be DDL or ODPT for standard flows
+- Never silently downgrade required issue type from `Problem` to `Task`
 
 ## API Endpoints Used
 
@@ -232,7 +231,10 @@ Core methods:
 - `assign_incident(...)`
 - `set_priority_by_matrix(...)`
 - `create_problem_from_incident(...)` — returns `{problem, incident}`
-- `create_issue_from_problem(...)` — returns `{problem, problem_task}`; creates PTASK in ServiceNow
+- `create_issue_from_problem(...)` — optional native helper mode that creates PTASK
+- `detect_native_jira_from_problem_capability(...)` — native capability classification
+- `create_native_jira_issue_from_problem(...)` — native route execution when available
+- `create_issue_from_problem_with_routing(...)` — native or Jira delegation routing API
 - `resolve_incident(...)`
 
 > **Credential loading:** `ServiceNowConfig.from_env()` uses `os.getenv()`.  When

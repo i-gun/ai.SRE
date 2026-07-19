@@ -65,6 +65,7 @@ class JiraClient:
     DASHBOARD_SEARCH_PATH = "/rest/api/3/dashboard/search"
     ISSUE_SEARCH_PATH = "/rest/api/3/search"
     ISSUE_PATH = "/rest/api/3/issue"
+    PROJECT_STATUSES_PATH_TEMPLATE = "/rest/api/3/project/{project_key}/statuses"
     DEFAULT_TIMEOUT_SECONDS = 30
 
     DEFAULT_ISSUE_FIELDS = [
@@ -103,7 +104,7 @@ class JiraClient:
         *,
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+    ) -> Any:
         try:
             response = self.session.request(
                 method=method,
@@ -126,9 +127,6 @@ class JiraClient:
             payload = response.json()
         except ValueError as exc:
             raise JiraAPIError("Jira returned non-JSON response") from exc
-
-        if not isinstance(payload, dict):
-            raise JiraAPIError("Jira returned an unexpected response shape")
 
         return payload
 
@@ -229,6 +227,58 @@ class JiraClient:
             params={"fields": ",".join(fields or self.DEFAULT_ISSUE_FIELDS)},
         )
 
+    def get_project_issue_types(self, *, project_key: str) -> List[str]:
+        normalized_project_key = project_key.strip()
+        if not normalized_project_key:
+            raise JiraValidationError("project_key is required for issue type lookup.")
+
+        payload = self._request(
+            "GET",
+            self.PROJECT_STATUSES_PATH_TEMPLATE.format(project_key=normalized_project_key),
+        )
+
+        records: List[Dict[str, Any]] = []
+        if isinstance(payload, list):
+            records = [item for item in payload if isinstance(item, dict)]
+        elif isinstance(payload, dict):
+            # Defensive compatibility for potential proxies/wrappers.
+            possible = payload.get("values") or payload.get("result") or []
+            if isinstance(possible, list):
+                records = [item for item in possible if isinstance(item, dict)]
+
+        issue_types: List[str] = []
+        seen = set()
+        for item in records:
+            name = str(item.get("name") or "").strip()
+            if name and name.lower() not in seen:
+                issue_types.append(name)
+                seen.add(name.lower())
+
+        return issue_types
+
+    def ensure_issue_type_available(self, *, project_key: str, issue_type: str) -> None:
+        normalized_project_key = project_key.strip()
+        normalized_issue_type = issue_type.strip()
+
+        if not normalized_project_key:
+            raise JiraValidationError("project_key is required for issue type preflight.")
+        if not normalized_issue_type:
+            raise JiraValidationError("issue_type is required for issue type preflight.")
+
+        available_issue_types = self.get_project_issue_types(project_key=normalized_project_key)
+        if not available_issue_types:
+            raise JiraValidationError(
+                "Unable to verify issue type availability for project "
+                f"'{normalized_project_key}'."
+            )
+
+        normalized_available = {name.lower(): name for name in available_issue_types}
+        if normalized_issue_type.lower() not in normalized_available:
+            raise JiraValidationError(
+                f"Issue type '{normalized_issue_type}' is not available in project "
+                f"'{normalized_project_key}'. Available types: {', '.join(available_issue_types)}"
+            )
+
     def create_issue(
         self,
         *,
@@ -241,6 +291,7 @@ class JiraClient:
         labels: Optional[List[str]] = None,
         components: Optional[List[str]] = None,
         extra_fields: Optional[Dict[str, Any]] = None,
+        verify_issue_type_available: bool = True,
     ) -> Dict[str, Any]:
         normalized_project_key = project_key.strip()
         normalized_issue_type = issue_type.strip()
@@ -252,6 +303,12 @@ class JiraClient:
             raise JiraValidationError("issue_type is required for Jira issue creation.")
         if not normalized_summary:
             raise JiraValidationError("summary is required for Jira issue creation.")
+
+        if verify_issue_type_available:
+            self.ensure_issue_type_available(
+                project_key=normalized_project_key,
+                issue_type=normalized_issue_type,
+            )
 
         fields: Dict[str, Any] = {
             "project": {"key": normalized_project_key},
