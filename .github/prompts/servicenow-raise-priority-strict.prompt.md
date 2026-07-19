@@ -1,6 +1,12 @@
+---
+name: "Incident Priority Raise"
+description: "Raise the priority of a ServiceNow incident with strict validation and confirmation gates."
+agent: "ServiceNow"
+---
+
 # ServiceNow Prompt: Strict Incident Priority Raise
 
-Use this prompt with the ServiceNow agent to increase incident priority with strict scope and ownership confirmation gates.
+Use this prompt with the ServiceNow agent to increase incident priority with strict scope, ownership, and approval confirmation gates.
 
 ```text
 @ServiceNow, raise priority of incident <INC_NUMBER> to <TARGET_PRIORITY>.
@@ -20,32 +26,60 @@ STRICT EXECUTION POLICY (must follow in order):
 3) Scope and ownership guardrails:
    - Check whether assignment_group is inside configured SERVICENOW_ASSIGNMENT_GROUPS scope.
    - Check whether assigned_to matches the currently configured ServiceNow user.
+   - Distinguish between:
+     - in-scope but assigned to another user
+     - outside configured assignment-group scope
 
 4) Mandatory confirmation gate:
-   - If assignment_group is outside configured scope OR assigned_to is not the configured user,
-     STOP and ask for explicit confirmation before any priority change.
+   - If assignment_group is inside configured scope but assigned_to is not the configured user,
+     ask for explicit approval and confirmation before any priority change.
+   - If assignment_group is outside configured scope,
+     STOP and return failed unless the platform policy explicitly permits cross-scope action.
    - Confirmation question must include:
      - incident number
      - current assignment_group
      - current assignee
+     - currently configured ServiceNow user
+     - whether the incident is merely not assigned to the current user or also outside configured scope
      - requested target priority
-   - If confirmation is not explicitly given, do not update anything.
+   - If explicit approval/confirmation is not given, do not update anything.
+   - If confirmation is required but not explicitly given, STOP with status=skipped.
 
-5) Apply priority change only after passing gate:
+5) Ownership override behavior:
+   - If the incident is in scope and assigned to another user, the current user may still raise priority after explicit approval/confirmation.
+   - Do not reassign the incident automatically unless reassignment is explicitly requested.
+   - Record that the priority raise was executed with ownership override approval.
+
+5.1) Cross-scope policy behavior:
+    - If assignment_group is outside configured scope and no explicit cross-scope policy permit is provided,
+       STOP with status=failed.
+    - Do not mutate priority, assignment, or notes in this branch.
+
+6) Apply priority change only after passing gate:
    - Use priority matrix logic (update impact/urgency), do NOT patch priority directly.
    - Add work note:
-     "[PRIORITY] Priority changed to <TARGET_PRIORITY> via matrix after scope/ownership validation."
+     "[PRIORITY] Priority changed to <TARGET_PRIORITY> via matrix after scope/ownership validation and required approval checks."
 
-6) Verify update:
+7) Verify update:
    - Re-fetch incident and confirm resulting priority matches requested target.
    - If mismatch, report as failed and include returned priority.
 
-7) Return strict result:
-   - Incident number, previous priority, requested priority, resulting priority
-   - assignment_group, assignee
-   - whether confirmation was required and user response
-   - status: success / skipped / failed
-   - failure reason (if any)
+8) Return strict result:
+    - confirmation:
+       - required (true/false)
+       - user_response
+    - incident:
+       - number
+       - previous_priority
+       - requested_priority
+       - resulting_priority
+       - assignment_group
+       - assignee
+    - policy:
+       - ownership_override_used
+       - cross_scope_action_blocked
+    - status: success | skipped | failed
+    - failure_reason (if any)
 
 Do not use Confluence or any external knowledge source for this operation.
 ```

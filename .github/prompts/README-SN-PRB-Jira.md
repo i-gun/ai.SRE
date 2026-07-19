@@ -38,7 +38,7 @@ Use [.github/prompts/agent-handoff-result-schema.prompt.md](.github/prompts/agen
 
 3. Jira issue created but required fields were not applied:
 - Cause: custom fields (Banner, Team, ServiceNow Priority, ServiceNow #) not resolved by field name to actual field IDs.
-- Action: in Jira step, resolve field IDs first and fail fast if a required field is unavailable.
+- Action: in Jira step, resolve field IDs first and fail fast if a required field is unavailable. For Team (`customfield_11002`, schema type `team`), do not depend on `allowedValues`; use two-phase mapping (create issue, then update Team by UUID from trusted config or live project history), then verify by id and name/title.
 
 4. Jira step failed on description format:
 - Cause: Jira Cloud API expected Atlassian Document Format (ADF) instead of plain text.
@@ -62,4 +62,4 @@ Use [.github/prompts/agent-handoff-result-schema.prompt.md](.github/prompts/agen
 
 7. Partial success returned:
 - Cause: core entity creation succeeded but one or more backpropagation or verification steps failed.
-- Action: inspect failure_reason and next_action from the response schema, remediate only failed step, then re-run that step (not full flow).
+- Action: inspect failure_reason and next_action from the response schema, remediate only failed step, then re-run that step (not full flow). For Jira Team mapping, `partial_success` is acceptable only when Team UUID resolution/update is the sole failed step and all other strict mappings are verified.

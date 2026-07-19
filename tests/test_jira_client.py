@@ -377,5 +377,145 @@ class TestSearchIssuesValidation(unittest.TestCase):
         self.assertEqual(kwargs["json"]["fields"], JiraClient.DEFAULT_ISSUE_FIELDS)
 
 
+# ---------------------------------------------------------------------------
+# TestTeamFieldOperations
+# ---------------------------------------------------------------------------
+
+class TestTeamFieldOperations(unittest.TestCase):
+
+    def setUp(self):
+        self.client = _make_client()
+
+    def test_resolve_team_id_from_project_history_returns_matching_uuid(self):
+        payload = {
+            "issues": [
+                {
+                    "fields": {
+                        "customfield_11002": {
+                            "id": "1111-aaaa",
+                            "name": "Payments",
+                        }
+                    }
+                },
+                {
+                    "fields": {
+                        "customfield_11002": {
+                            "id": "472b84df-0340-44a7-91ee-fc748691daa7",
+                            "name": "Site Reliability Engineering",
+                        }
+                    }
+                },
+            ]
+        }
+
+        with patch.object(self.client, "_request", return_value=payload) as mock_req:
+            team_id = self.client.resolve_team_id_from_project_history(
+                project_key="DDL",
+                team_name="Site Reliability Engineering",
+            )
+
+        self.assertEqual(team_id, "472b84df-0340-44a7-91ee-fc748691daa7")
+        _, kwargs = mock_req.call_args
+        self.assertEqual(kwargs["json"]["fields"], ["customfield_11002"])
+
+    def test_resolve_team_id_from_project_history_raises_when_not_found(self):
+        payload = {
+            "issues": [
+                {
+                    "fields": {
+                        "customfield_11002": {
+                            "id": "1111-aaaa",
+                            "name": "Payments",
+                        }
+                    }
+                }
+            ]
+        }
+        with patch.object(self.client, "_request", return_value=payload):
+            with self.assertRaises(JiraValidationError):
+                self.client.resolve_team_id_from_project_history(
+                    project_key="DDL",
+                    team_name="Site Reliability Engineering",
+                )
+
+    def test_set_issue_team_with_direct_team_id_updates_and_verifies(self):
+        with patch.object(self.client, "update_issue", return_value={}) as mock_update:
+            with patch.object(
+                self.client,
+                "get_issue",
+                return_value={
+                    "fields": {
+                        "customfield_11002": {
+                            "id": "472b84df-0340-44a7-91ee-fc748691daa7",
+                            "name": "Site Reliability Engineering",
+                        }
+                    }
+                },
+            ) as mock_get:
+                result = self.client.set_issue_team(
+                    issue_key="DDL-1",
+                    team_id="472b84df-0340-44a7-91ee-fc748691daa7",
+                )
+
+        self.assertEqual(result["team_id"], "472b84df-0340-44a7-91ee-fc748691daa7")
+        self.assertEqual(result["team_name"], "Site Reliability Engineering")
+        mock_update.assert_called_once_with(
+            "DDL-1",
+            fields={"customfield_11002": "472b84df-0340-44a7-91ee-fc748691daa7"},
+        )
+        mock_get.assert_called_once_with("DDL-1", fields=["customfield_11002"])
+
+    def test_set_issue_team_resolves_from_name_when_team_id_missing(self):
+        with patch.object(
+            self.client,
+            "resolve_team_id_from_project_history",
+            return_value="472b84df-0340-44a7-91ee-fc748691daa7",
+        ) as mock_resolve:
+            with patch.object(self.client, "update_issue", return_value={}):
+                with patch.object(
+                    self.client,
+                    "get_issue",
+                    return_value={
+                        "fields": {
+                            "customfield_11002": {
+                                "id": "472b84df-0340-44a7-91ee-fc748691daa7",
+                                "name": "Site Reliability Engineering",
+                            }
+                        }
+                    },
+                ):
+                    result = self.client.set_issue_team(
+                        issue_key="DDL-2",
+                        team_name="Site Reliability Engineering",
+                        project_key="DDL",
+                    )
+
+        self.assertEqual(result["team_id"], "472b84df-0340-44a7-91ee-fc748691daa7")
+        mock_resolve.assert_called_once_with(
+            project_key="DDL",
+            team_name="Site Reliability Engineering",
+        )
+
+    def test_set_issue_team_raises_on_verification_mismatch(self):
+        with patch.object(self.client, "update_issue", return_value={}):
+            with patch.object(
+                self.client,
+                "get_issue",
+                return_value={
+                    "fields": {
+                        "customfield_11002": {
+                            "id": "different-id",
+                            "name": "Different Team",
+                        }
+                    }
+                },
+            ):
+                with self.assertRaises(JiraValidationError):
+                    self.client.set_issue_team(
+                        issue_key="DDL-3",
+                        team_id="472b84df-0340-44a7-91ee-fc748691daa7",
+                    )
+
+
 if __name__ == "__main__":
     unittest.main()

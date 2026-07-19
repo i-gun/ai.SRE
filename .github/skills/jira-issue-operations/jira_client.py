@@ -66,6 +66,8 @@ class JiraClient:
     ISSUE_SEARCH_PATH = "/rest/api/3/search"
     ISSUE_PATH = "/rest/api/3/issue"
     PROJECT_STATUSES_PATH_TEMPLATE = "/rest/api/3/project/{project_key}/statuses"
+    ISSUE_SEARCH_JQL_PATH = "/rest/api/3/search/jql"
+    TEAM_FIELD_ID = "customfield_11002"
     DEFAULT_TIMEOUT_SECONDS = 30
 
     DEFAULT_ISSUE_FIELDS = [
@@ -345,6 +347,131 @@ class JiraClient:
             f"{self.ISSUE_PATH}/{normalized_issue_key}",
             json={"fields": fields},
         )
+
+    def resolve_team_id_from_project_history(
+        self,
+        *,
+        project_key: str,
+        team_name: str,
+        limit: int = 50,
+    ) -> str:
+        """Resolve Atlassian Team UUID for a project by sampling recent issues.
+
+        Team fields of schema type `team` often do not expose allowedValues,
+        so this method derives a safe UUID by matching visible team names on
+        recent issues where Team is already populated.
+        """
+        normalized_project_key = project_key.strip()
+        normalized_team_name = team_name.strip()
+        if not normalized_project_key:
+            raise JiraValidationError("project_key is required for team resolution.")
+        if not normalized_team_name:
+            raise JiraValidationError("team_name is required for team resolution.")
+
+        payload = self._request(
+            "POST",
+            self.ISSUE_SEARCH_JQL_PATH,
+            json={
+                "jql": (
+                    f'project = {normalized_project_key} '
+                    'AND "Team[Team]" is not EMPTY ORDER BY updated DESC'
+                ),
+                "maxResults": self._normalize_limit(limit),
+                "fields": [self.TEAM_FIELD_ID],
+            },
+        )
+
+        issues = payload.get("issues", [])
+        if not isinstance(issues, list):
+            raise JiraAPIError("Jira team lookup returned an unexpected response shape")
+
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            fields = issue.get("fields", {})
+            if not isinstance(fields, dict):
+                continue
+
+            team_value = fields.get(self.TEAM_FIELD_ID)
+            if not isinstance(team_value, dict):
+                continue
+
+            candidate_id = str(team_value.get("id") or "").strip()
+            candidate_name = str(team_value.get("name") or team_value.get("title") or "").strip()
+            if not candidate_id or not candidate_name:
+                continue
+
+            if candidate_name.lower() == normalized_team_name.lower():
+                return candidate_id
+
+        raise JiraValidationError(
+            "Unable to resolve team id from project history for "
+            f"project '{normalized_project_key}' and team '{normalized_team_name}'."
+        )
+
+    def set_issue_team(
+        self,
+        *,
+        issue_key: str,
+        team_id: Optional[str] = None,
+        team_name: Optional[str] = None,
+        project_key: Optional[str] = None,
+        verify: bool = True,
+    ) -> Dict[str, Any]:
+        """Set Team field on an issue using UUID directly or resolved from history."""
+        normalized_issue_key = self._normalize_issue_key(issue_key)
+        normalized_team_id = (team_id or "").strip()
+
+        if not normalized_team_id:
+            normalized_team_name = (team_name or "").strip()
+            normalized_project_key = (project_key or "").strip()
+            if not normalized_team_name:
+                raise JiraValidationError(
+                    "Either team_id or team_name must be provided for Team field update."
+                )
+            if not normalized_project_key:
+                raise JiraValidationError(
+                    "project_key is required when resolving team_id from team_name."
+                )
+            normalized_team_id = self.resolve_team_id_from_project_history(
+                project_key=normalized_project_key,
+                team_name=normalized_team_name,
+            )
+
+        self.update_issue(
+            normalized_issue_key,
+            fields={self.TEAM_FIELD_ID: normalized_team_id},
+        )
+
+        if not verify:
+            return {
+                "issue_key": normalized_issue_key,
+                "team_id": normalized_team_id,
+                "team_name": None,
+            }
+
+        issue = self.get_issue(normalized_issue_key, fields=[self.TEAM_FIELD_ID])
+        issue_fields = issue.get("fields", {}) if isinstance(issue, dict) else {}
+        team_value = issue_fields.get(self.TEAM_FIELD_ID) if isinstance(issue_fields, dict) else None
+
+        if not isinstance(team_value, dict):
+            raise JiraValidationError(
+                "Team update completed but verification could not read a team object from the issue."
+            )
+
+        applied_team_id = str(team_value.get("id") or "").strip()
+        if applied_team_id != normalized_team_id:
+            raise JiraValidationError(
+                "Team update completed but verification mismatch was detected. "
+                f"Expected team id '{normalized_team_id}', got '{applied_team_id or 'N/A'}'."
+            )
+
+        applied_team_name = str(team_value.get("name") or team_value.get("title") or "").strip() or None
+        return {
+            "issue_key": normalized_issue_key,
+            "team_id": applied_team_id,
+            "team_name": applied_team_name,
+        }
 
     def add_comment(self, issue_key: str, *, comment: str) -> Dict[str, Any]:
         normalized_issue_key = self._normalize_issue_key(issue_key)

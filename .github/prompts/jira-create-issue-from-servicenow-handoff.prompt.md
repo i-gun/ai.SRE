@@ -35,6 +35,9 @@ STRICT EXECUTION POLICY:
    - Team
    - ServiceNow Priority
    - ServiceNow #
+   - Team field is schema type `team` and may not return `allowedValues`; resolve Team by UUID using live issue history/project context when needed
+   - For Team, prefer update payload shape: `customfield_11002: <team_uuid_string>`
+   - Do not require Team `allowedValues` for acceptance; Team must be treated as UUID-based mapping
    - If any required field for selected route is unavailable, STOP with failed status and diagnostics
 
 3) Create issue summary/description from incident and problem context:
@@ -58,9 +61,24 @@ STRICT EXECUTION POLICY:
    - ServiceNow Priority: <Incident_Priority>
    - ServiceNow #: <Problem_Number>, <Incident_Number>
 
+4.1) Team mapping execution strategy (required for DDL route):
+    - Use a two-phase write for Team:
+       - Phase A: create issue with non-Team fields.
+       - Phase B: update Team using `customfield_11002` with resolved team UUID.
+    - Team UUID resolution order:
+       - First: trusted configured UUID (if provided by policy/runtime context).
+       - Second: derive from live project issue history where Team is populated and name matches.
+    - If Team UUID cannot be resolved, return `partial_success` only if issue creation and all other strict mappings are verified.
+
 5) Verify create/update:
    - Re-fetch issue and verify labels and mapped fields
+   - Verify Team by both id and display name/title when Team mapping is required
    - Verify actual Jira issue type equals requested/required issue type
+
+5.1) Status policy for Team:
+   - Return `success` only when Team mapping is required and Team is verified (id + name/title) after update.
+   - Return `partial_success` only when Team UUID resolution/update is the only failed part.
+   - Return `failed` when required issue type/routing/core field mappings fail.
 
 6) Return strict result payload:
    - issue_key
