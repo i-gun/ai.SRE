@@ -71,6 +71,9 @@ Expected behavior:
 - Never retrieve incidents outside `SERVICENOW_ASSIGNMENT_GROUPS`
 - Return concise incident summaries (`number`, `short_description`, `state`, `priority`, `assigned_to`, `assignment_group`, `sys_id`)
 - Support result limiting and deterministic ordering
+- For non-resolved workflows (for example "active incidents not in state Resolved"), enforce unresolved-only filters at both query and post-filter stages.
+- Treat `6`, `6 - Resolved`, and display values containing `Resolved` as resolved states.
+- Never update incidents already in resolved state when user requested non-resolved processing.
 
 ## Capability 2: Add Work Notes
 Update incident with operational progress:
@@ -208,6 +211,7 @@ Jira issue-type policy for delegated route:
 - Priority change requests must map to a valid matrix pair before update
 - Problem raising requires a valid source incident and successful `problem_id` linkage update
 - Native issue routing requires a valid source problem and capability classification
+- Non-resolved-only requests must exclude resolved incidents (`6`, `6 - Resolved`, `Resolved`) before any assignment or update action
 
 ## Resolution Note Quality Gate
 Resolution note should include:

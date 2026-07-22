@@ -302,6 +302,23 @@ class ServiceNowClient:
             return str(raw).strip()
         return str(value or "").strip()
 
+    @classmethod
+    def is_resolved_state(cls, state_value: Any) -> bool:
+        """Return True when a state value represents Resolved.
+
+        ServiceNow responses may return either numeric state codes or display
+        values depending on query parameters and instance behavior.
+        """
+        normalized = cls._extract_reference_value(state_value).strip().lower()
+        if not normalized:
+            return False
+        return (
+            normalized == "6"
+            or normalized.startswith("6 -")
+            or normalized == "resolved"
+            or "resolved" in normalized
+        )
+
     def _validate_assignment_group_allowed(self, assignment_group: str) -> None:
         group = (assignment_group or "").strip()
         if not group:
@@ -414,6 +431,7 @@ class ServiceNowClient:
         assigned_to: Optional[str] = None,
         assignment_group: Optional[str] = None,
         active_only: bool = True,
+        exclude_resolved: bool = False,
         unassigned_only: bool = False,
         limit: int = 50,
     ) -> List[Dict[str, Any]]:
@@ -440,6 +458,10 @@ class ServiceNowClient:
         if active_only:
             query_parts.append("active=true")
 
+        if exclude_resolved:
+            # Server-side guard: state code 6 is Resolved.
+            query_parts.append("state!=6")
+
         if unassigned_only:
             query_parts.append("assigned_toISEMPTY")
 
@@ -458,7 +480,17 @@ class ServiceNowClient:
             },
         )
 
-        return result.get("result", [])
+        incidents = result.get("result", [])
+        if not exclude_resolved:
+            return incidents
+
+        # Defensive client-side guard in case instance display/value behavior
+        # or ACL rules bypass the server-side state condition.
+        return [
+            incident
+            for incident in incidents
+            if not self.is_resolved_state(incident.get("state"))
+        ]
 
     def create_incident(
         self,

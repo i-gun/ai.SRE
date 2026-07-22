@@ -25,4 +25,6 @@ Requirements:
 DO NOT:
 - Use @Confluence skill for this prompt; close notes are already provided and must be used as-is.
 - Fetch or update incidents already in state 'Resolved'.
+- Treat all of these as resolved and exclude them: `6`, `6 - Resolved`, `Resolved` (or any display value containing `Resolved`).
+- Use both query-time and client-side state checks before assignment or resolution actions.
 ```

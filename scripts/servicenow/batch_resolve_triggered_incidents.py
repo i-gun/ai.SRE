@@ -75,6 +75,12 @@ if str(INCIDENT_SKILL_PATH) not in sys.path:
 from servicenow_client import ServiceNowClient, ServiceNowValidationError, ServiceNowAPIError
 
 
+def _reference_text(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("display_value") or value.get("value") or "").strip()
+    return str(value or "").strip()
+
+
 def main():
     # ========================================================================
     # STEP 0: INITIALIZATION
@@ -107,14 +113,13 @@ def main():
 
     print("[FETCH] Retrieving active incidents with short_description starting with 'Triggered : '...")
     try:
-        # List all active incidents first, then filter client-side for short_description
-        all_incidents = client.list_incidents(active_only=True, limit=500)
-        
-        # Filter for 'Triggered : ' pattern and exclude Resolved state
+        # Enforce unresolved-only at query level and with client-side defensive filter.
+        all_incidents = client.list_incidents(active_only=True, exclude_resolved=True, limit=500)
+
+        # Filter for 'Triggered : ' pattern.
         matching_incidents = [
             inc for inc in all_incidents
             if inc.get("short_description", "").startswith("Triggered : ")
-            and inc.get("state") != "6"  # 6 = Resolved
         ]
         
         print(f"[OK] Found {len(matching_incidents)} matching incident(s)\n")
@@ -135,25 +140,25 @@ def main():
     print("STEP 2: MATCHING INCIDENTS SUMMARY")
     print("=" * 100 + "\n")
 
-    print(f"{'#':<3} {'Number':<12} {'Priority':<10} {'State':<12} {'Assignment Group':<25} {'Assigned To':<20} {'Short Description':<40}")
-    print("-" * 130)
+    print(
+        f"{'#':<3} {'Number':<12} {'Priority':<12} {'State':<14} {'Assignment Group':<30} "
+        f"{'Assigned To':<28} {'sys_id':<34} {'Short Description':<40}"
+    )
+    print("-" * 190)
 
     for idx, inc in enumerate(matching_incidents, 1):
         number = inc.get("number", "N/A")
         priority = inc.get("priority", "N/A")
-        state = inc.get("state", "N/A")
-        assignment_group = inc.get("assignment_group", {})
-        if isinstance(assignment_group, dict):
-            assignment_group = assignment_group.get("display_value") or assignment_group.get("value") or "N/A"
-        assigned_to = inc.get("assigned_to", {})
-        if isinstance(assigned_to, dict):
-            assigned_to = assigned_to.get("display_value") or assigned_to.get("value") or "(unassigned)"
-        else:
-            assigned_to = assigned_to or "(unassigned)"
+        state = _reference_text(inc.get("state")) or "N/A"
+        assignment_group = _reference_text(inc.get("assignment_group")) or "N/A"
+        assigned_to = _reference_text(inc.get("assigned_to")) or "(unassigned)"
         short_desc = inc.get("short_description", "N/A")[:38]
         sys_id = inc.get("sys_id", "N/A")
-        
-        print(f"{idx:<3} {number:<12} {str(priority):<10} {str(state):<12} {str(assignment_group):<25} {str(assigned_to):<20} {short_desc:<40}")
+
+        print(
+            f"{idx:<3} {number:<12} {str(priority):<12} {str(state):<14} {str(assignment_group):<30} "
+            f"{str(assigned_to):<28} {str(sys_id):<34} {short_desc:<40}"
+        )
 
     print(f"\n[CONFIRM] Total incidents to process: {len(matching_incidents)}\n")
 
@@ -166,7 +171,7 @@ def main():
 
     unassigned_incidents = [
         inc for inc in matching_incidents
-        if not inc.get("assigned_to") or inc.get("assigned_to") == ""
+        if not _reference_text(inc.get("assigned_to"))
     ]
 
     assignment_results = {
@@ -311,11 +316,10 @@ def main():
     # Check for remaining matching incidents (should be none if all resolved)
     print(f"\n[FINAL CHECK] Verifying incident states...")
     try:
-        remaining = client.list_incidents(active_only=True, limit=500)
+        remaining = client.list_incidents(active_only=True, exclude_resolved=True, limit=500)
         remaining_matching = [
             inc for inc in remaining
             if inc.get("short_description", "").startswith("Triggered : ")
-            and inc.get("state") != "6"
         ]
         print(f"  - Remaining active 'Triggered : ' incidents: {len(remaining_matching)}")
         if remaining_matching:

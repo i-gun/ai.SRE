@@ -34,6 +34,16 @@ Default behavior:
 - Sorted by `sys_updated_on` descending
 - Configurable `limit`
 
+State handling guardrails:
+- For prompts that require non-resolved incidents, apply both:
+    - server-side filtering (`state!=6`), and
+    - defensive client-side filtering using normalized state values
+- Treat any of the following as resolved and exclude from processing:
+    - `6`
+    - `6 - Resolved`
+    - `Resolved` (or display values containing `Resolved`)
+- Never fetch/update records already in resolved state for non-resolved workflows
+
 Optional retrieval mode:
 - Unassigned incidents only (`unassigned_only=true`)
 
@@ -226,6 +236,7 @@ Use [servicenow_client.py](servicenow_client.py) for operational code.
 
 Core methods:
 - `list_incidents(...)`
+- `list_incidents(..., exclude_resolved=True)` for unresolved-only workflows
 - `create_incident(...)`
 - `add_work_note(...)`
 - `assign_incident(...)`
