@@ -93,10 +93,7 @@ Use for scripts that support multiple workflows or are part of operational proce
 scripts/
 ├── servicenow/
 │   ├── batch_resolve_triggered_incidents.py
-│   ├── create_incident_from_problem.py
-│   ├── execute_incident_operations.py
-│   ├── resolve_incident_script.py
-│   ├── search_resolved_incidents.py
+│   ├── create_issue_from_problem.py
 │   └── common.py                           # Shared helpers
 ├── jira/
 │   ├── search_issues.py
@@ -118,6 +115,8 @@ scripts/
 - Should follow service-oriented organization
 - Include `common.py` for shared bootstrap and helper functions
 - Document expected `.env` variables at top of script
+- Mutating scripts must default to read-only mode and require an explicit execution flag
+- Batch mutation scripts must enforce a reviewed incident-count gate before applying writes
 - Add to repository with version control
 
 **Example structure (servicenow/common.py):**
@@ -252,9 +251,15 @@ rm artifacts/test_sn_connection.py     # Remove after resolved
 
 **Permanent Alternative (if needed repeatedly):**
 ```bash
-# Move to scripts/ if used in operational procedures
-scripts/servicenow/test_connection.py   # Permanent, versioned
+# Keep in artifacts/ unless adopted as a long-term operational command
+artifacts/servicenow/archive/test_connection.py
 ```
+
+## Archive Retention Policy
+
+- `artifacts/servicenow/archive/` is for historical diagnostics and one-off operational scripts kept temporarily for traceability.
+- Review archived scripts during adjacent cleanup work and remove entries that are no longer referenced by docs, tickets, or active runbooks.
+- Do not promote archived scripts back into `scripts/` without parameterization, documentation, and explicit execution gates.
 
 ### Example 3: Creating Reusable Operational Script
 

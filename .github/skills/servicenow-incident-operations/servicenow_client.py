@@ -22,6 +22,7 @@ Authentication:
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
 
@@ -137,12 +138,15 @@ class ServiceNowClient:
         "assigned_to",
         "assignment_group",
         "problem_id",
+        "u_vendor_ticket",
+        "vendor_ticket",
         "sys_updated_on",
     ]
 
     PROBLEM_FIELDS = [
         "sys_id",
         "number",
+        "origin_task",
         "short_description",
         "description",
         "category",
@@ -330,6 +334,37 @@ class ServiceNowClient:
                 f"Allowed groups: {configured_groups}"
             )
 
+    @staticmethod
+    def _is_sys_id(value: str) -> bool:
+        return bool(re.fullmatch(r"[0-9a-fA-F]{32}", value or ""))
+
+    @classmethod
+    def _assigned_to_query_clause(cls, assigned_to: str) -> str:
+        assignee = (assigned_to or "").strip()
+        if not assignee:
+            raise ServiceNowValidationError("assigned_to must not be empty")
+        if cls._is_sys_id(assignee):
+            return f"assigned_to={assignee}"
+        # Username-based filtering is reliable for values like Igor.Gunia.
+        return f"assigned_to.user_name={assignee}"
+
+    @staticmethod
+    def _derive_incident_number_from_problem(problem: Dict[str, Any]) -> str:
+        direct = ServiceNowClient._extract_reference_value(problem.get("origin_task"))
+        if direct:
+            return direct
+
+        candidates = [
+            ServiceNowClient._extract_reference_value(problem.get("description")),
+            ServiceNowClient._extract_reference_value(problem.get("short_description")),
+            ServiceNowClient._extract_reference_value(problem.get("problem_statement")),
+        ]
+        for candidate in candidates:
+            match = re.search(r"\bINC\d{4,}\b", candidate or "", flags=re.IGNORECASE)
+            if match:
+                return match.group(0).upper()
+        return ""
+
     def _find_incident(
         self, *, incident_number: Optional[str], sys_id: Optional[str]
     ) -> Dict[str, Any]:
@@ -442,7 +477,7 @@ class ServiceNowClient:
 
         query_parts: List[str] = []
         if assigned_to:
-            query_parts.append(f"assigned_to={assigned_to}")
+            query_parts.append(self._assigned_to_query_clause(assigned_to))
 
         if assignment_group:
             if assignment_group not in self.config.assignment_groups:
@@ -492,6 +527,56 @@ class ServiceNowClient:
             if not self.is_resolved_state(incident.get("state"))
         ]
 
+    def query_incidents(
+        self,
+        *,
+        query_parts: List[str],
+        assignment_group: Optional[str] = None,
+        limit: int = 50,
+        fields: Optional[List[str]] = None,
+        order_by_desc: Optional[str] = "sys_updated_on",
+        exclude_resolved: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Query incidents within designated scope using additional encoded query parts.
+
+        This helper centralizes scope enforcement for scripts that need more
+        specific ServiceNow filters than list_incidents(...).
+        """
+        if limit <= 0 or limit > 500:
+            raise ServiceNowValidationError("limit must be between 1 and 500")
+
+        effective_query_parts: List[str] = []
+        if assignment_group:
+            self._validate_assignment_group_allowed(assignment_group)
+            effective_query_parts.append(f"assignment_group.name={assignment_group}")
+        else:
+            effective_query_parts.append(self._designated_assignment_group_query_clause())
+
+        effective_query_parts.extend(part for part in query_parts if str(part or "").strip())
+
+        if exclude_resolved:
+            effective_query_parts.append("state!=6")
+
+        params: Dict[str, Any] = {
+            "sysparm_query": "^".join(effective_query_parts),
+            "sysparm_limit": limit,
+            "sysparm_fields": ",".join(fields or self.LIST_FIELDS),
+            "sysparm_display_value": "true",
+            "sysparm_exclude_reference_link": "true",
+        }
+        if order_by_desc:
+            params["sysparm_order_by_desc"] = order_by_desc
+
+        result = self._request("GET", self.INCIDENT_TABLE_PATH, params=params)
+        incidents = result.get("result", [])
+        if not exclude_resolved:
+            return incidents
+        return [
+            incident
+            for incident in incidents
+            if not self.is_resolved_state(incident.get("state"))
+        ]
+
     def create_incident(
         self,
         *,
@@ -501,6 +586,11 @@ class ServiceNowClient:
         assignment_group: Optional[str] = None,
         category: Optional[str] = None,
         subcategory: Optional[str] = None,
+        assigned_to: Optional[str] = None,
+        service_offering: Optional[str] = None,
+        cmdb_ci: Optional[str] = None,
+        contact: Optional[str] = None,
+        contact_type: Optional[str] = None,
         impact: str = "3",
         urgency: str = "3",
         work_note: Optional[str] = None,
@@ -538,6 +628,16 @@ class ServiceNowClient:
             payload["category"] = category.strip()
         if subcategory and subcategory.strip():
             payload["subcategory"] = subcategory.strip()
+        if assigned_to and assigned_to.strip():
+            payload["assigned_to"] = assigned_to.strip()
+        if service_offering and service_offering.strip():
+            payload["service_offering"] = service_offering.strip()
+        if cmdb_ci and cmdb_ci.strip():
+            payload["cmdb_ci"] = cmdb_ci.strip()
+        if contact and contact.strip():
+            payload["u_contact"] = contact.strip()
+        if contact_type and contact_type.strip():
+            payload["contact_type"] = contact_type.strip()
         if work_note and work_note.strip():
             payload["work_notes"] = work_note.strip()
 
@@ -555,6 +655,59 @@ class ServiceNowClient:
         created = result.get("result", {})
         self._validate_incident_assignment_group_scope(created)
         return created
+
+    def update_incident_fields(
+        self,
+        *,
+        incident_number: Optional[str] = None,
+        sys_id: Optional[str] = None,
+        fields: Dict[str, Any],
+        require_active: bool = False,
+        forbid_resolved: bool = False,
+    ) -> Dict[str, Any]:
+        """Patch incident fields after validating scope and state constraints."""
+        if not fields:
+            raise ServiceNowValidationError("fields is required")
+
+        incident = self._find_incident(incident_number=incident_number, sys_id=sys_id)
+        target_sys_id = incident.get("sys_id")
+        if not target_sys_id:
+            raise ServiceNowValidationError("Target incident does not have sys_id")
+
+        if require_active:
+            active_value = self._extract_reference_value(incident.get("active")).lower()
+            if active_value in {"false", "0", "no"}:
+                raise ServiceNowValidationError("Incident is not active and cannot be updated.")
+
+        if forbid_resolved and self.is_resolved_state(incident.get("state")):
+            raise ServiceNowValidationError("Incident is already resolved and cannot be updated.")
+
+        payload = {
+            key: value
+            for key, value in fields.items()
+            if value is not None
+        }
+        if not payload:
+            raise ServiceNowValidationError("fields must contain at least one non-null value")
+
+        assignment_group = payload.get("assignment_group")
+        if assignment_group is not None:
+            self._validate_assignment_group_allowed(str(assignment_group))
+
+        result = self._request(
+            "PATCH",
+            f"{self.INCIDENT_TABLE_PATH}/{target_sys_id}",
+            json=payload,
+            params={
+                "sysparm_display_value": "true",
+                "sysparm_exclude_reference_link": "true",
+                "sysparm_fields": ",".join(self.LIST_FIELDS + ["close_code", "close_notes", "active"]),
+            },
+        )
+
+        updated = result.get("result", {})
+        self._validate_incident_assignment_group_scope(updated)
+        return updated
 
     def assign_incident(
         self,
@@ -592,15 +745,7 @@ class ServiceNowClient:
         payload: Dict[str, Any] = {"assigned_to": assignee}
         if work_note and work_note.strip():
             payload["work_notes"] = work_note.strip()
-
-        result = self._request(
-            "PATCH",
-            f"{self.INCIDENT_TABLE_PATH}/{target_sys_id}",
-            json=payload,
-            params={"sysparm_display_value": "true", "sysparm_exclude_reference_link": "true"},
-        )
-
-        return result.get("result", {})
+        return self.update_incident_fields(sys_id=target_sys_id, fields=payload)
 
     @staticmethod
     def _normalize_priority_request(priority: str) -> str:
@@ -652,15 +797,7 @@ class ServiceNowClient:
         }
         if work_note and work_note.strip():
             payload["work_notes"] = work_note.strip()
-
-        result = self._request(
-            "PATCH",
-            f"{self.INCIDENT_TABLE_PATH}/{target_sys_id}",
-            json=payload,
-            params={"sysparm_display_value": "true", "sysparm_exclude_reference_link": "true"},
-        )
-
-        updated = result.get("result", {})
+        updated = self.update_incident_fields(sys_id=target_sys_id, fields=payload)
 
         # Validate resulting priority whenever it is returned by ServiceNow.
         resulting_priority = updated.get("priority")
@@ -715,7 +852,8 @@ class ServiceNowClient:
             )
 
         problem_payload: Dict[str, Any] = {
-            "origin_task": incident_number_value,
+            # origin_task is a reference field; provide the incident sys_id for reliable linkage.
+            "origin_task": incident_sys_id,
             "category": "Application",
             "subcategory": "E-Commerce",
             "problem_statement": incident_short_desc,
@@ -733,6 +871,7 @@ class ServiceNowClient:
             self.PROBLEM_TABLE_PATH,
             json=problem_payload,
             params={
+                "sysparm_input_display_value": "true",
                 "sysparm_display_value": "true",
                 "sysparm_exclude_reference_link": "true",
             },
@@ -1073,12 +1212,13 @@ class ServiceNowClient:
             )
 
         problem = self._find_problem(problem_number=problem_number, sys_id=sys_id)
+        incident_number = self._derive_incident_number_from_problem(problem)
         return {
             "route_used": "jira_agent_delegation",
             "status": "handoff_required",
             "capability": capability,
             "handoff": {
-                "incident_number": self._extract_reference_value(problem.get("origin_task")),
+            "incident_number": incident_number,
                 "problem_number": self._extract_reference_value(problem.get("number")),
                 "problem_url": None,
                 "incident_summary": self._extract_reference_value(problem.get("problem_statement"))
@@ -1126,14 +1266,7 @@ class ServiceNowClient:
                 )
             update_payload["assignment_group"] = assignment_group
 
-        result = self._request(
-            "PATCH",
-            f"{self.INCIDENT_TABLE_PATH}/{target_sys_id}",
-            json=update_payload,
-            params={"sysparm_display_value": "true", "sysparm_exclude_reference_link": "true"},
-        )
-
-        return result.get("result", {})
+        return self.update_incident_fields(sys_id=target_sys_id, fields=update_payload)
 
     @staticmethod
     def _validate_resolution_note(close_notes: str) -> None:
@@ -1169,15 +1302,6 @@ class ServiceNowClient:
 
         self._validate_resolution_note(close_notes)
 
-        incident = self._find_incident(incident_number=incident_number, sys_id=sys_id)
-        target_sys_id = incident.get("sys_id")
-        if not target_sys_id:
-            raise ServiceNowValidationError("Target incident does not have sys_id")
-
-        active_value = str(incident.get("active", "")).lower()
-        if active_value in {"false", "0"}:
-            raise ServiceNowValidationError("Incident is not active and cannot be resolved.")
-
         payload: Dict[str, Any] = {
             "state": resolved_state,
             "close_code": code,
@@ -1187,11 +1311,65 @@ class ServiceNowClient:
         if work_note and work_note.strip():
             payload["work_notes"] = work_note.strip()
 
-        result = self._request(
-            "PATCH",
-            f"{self.INCIDENT_TABLE_PATH}/{target_sys_id}",
-            json=payload,
-            params={"sysparm_display_value": "true", "sysparm_exclude_reference_link": "true"},
+        return self.update_incident_fields(
+            incident_number=incident_number,
+            sys_id=sys_id,
+            fields=payload,
+            require_active=True,
+            forbid_resolved=True,
         )
 
-        return result.get("result", {})
+    def resolve_incident_with_updates(
+        self,
+        *,
+        incident_number: Optional[str] = None,
+        sys_id: Optional[str] = None,
+        close_code: str,
+        close_notes: str,
+        category: Optional[str] = None,
+        subcategory: Optional[str] = None,
+        service_offering: Optional[str] = None,
+        vendor_ticket: Optional[str] = None,
+        work_note: Optional[str] = None,
+        resolved_state: str = "6",
+        extra_fields: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Resolve an incident while applying additional operational fields safely."""
+        code = (close_code or "").strip()
+        if not code:
+            raise ServiceNowValidationError("close_code is required for resolution")
+
+        self._validate_resolution_note(close_notes)
+
+        payload: Dict[str, Any] = {
+            "state": resolved_state,
+            "close_code": code,
+            "close_notes": close_notes.strip(),
+        }
+        if category and category.strip():
+            payload["category"] = category.strip()
+        if subcategory and subcategory.strip():
+            payload["subcategory"] = subcategory.strip()
+        if service_offering and service_offering.strip():
+            payload["service_offering"] = service_offering.strip()
+        if vendor_ticket and vendor_ticket.strip():
+            payload["u_vendor_ticket"] = vendor_ticket.strip()
+            payload["vendor_ticket"] = vendor_ticket.strip()
+        if work_note and work_note.strip():
+            payload["work_notes"] = work_note.strip()
+        if extra_fields:
+            payload.update({key: value for key, value in extra_fields.items() if value is not None})
+
+        updated = self.update_incident_fields(
+            incident_number=incident_number,
+            sys_id=sys_id,
+            fields=payload,
+            require_active=True,
+            forbid_resolved=True,
+        )
+        if not self.is_resolved_state(updated.get("state")):
+            raise ServiceNowValidationError(
+                "Incident update completed but resulting state is not Resolved. "
+                f"Result: {self._extract_reference_value(updated.get('state'))}"
+            )
+        return updated

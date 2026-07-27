@@ -1,3 +1,10 @@
+---
+name: "ServiceNow Resolve RTCDP Incidents"
+description: "Resolve active non-resolved RTCDP incidents in scoped assignment groups with standardized closure fields and strict resolved-state filtering."
+argument-hint: "Optional override: change Jira ticket/vendor ticket or refine short-description prefix before running."
+agent: "ServiceNow"
+---
+
 # ServiceNow Prompt: Resolve Active Non-Resolved RTCDP Incidents
 
 Use this prompt with the ServiceNow agent to find active, non-resolved RTCDP incidents in scoped groups and resolve them with standardized closure fields.

@@ -15,30 +15,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_ROOT = PROJECT_ROOT / "scripts"
+scripts_root_str = str(SCRIPTS_ROOT)
+if scripts_root_str not in sys.path:
+    sys.path.insert(0, scripts_root_str)
+
+from bootstrap_shared import bootstrap_paths
+
+
 NEWRELIC_ALERT_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "newrelic-alert-operations"
 SERVICENOW_INCIDENT_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "servicenow-incident-operations"
 ASSIGNMENT_PROMPT_PATH = PROJECT_ROOT / ".github" / "prompts" / "servicenow-assign-unassigned-incidents.prompt.md"
-
-
-def _load_env_raw(env_path: Path) -> None:
-    """Load .env without python-dotenv to preserve special characters."""
-    if not env_path.exists():
-        return
-
-    with env_path.open() as handle:
-        for line in handle:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-
-            key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip()
-            if (value.startswith('"') and value.endswith('"')) or (
-                value.startswith("'") and value.endswith("'")
-            ):
-                value = value[1:-1]
-            os.environ[key] = value
 
 
 @dataclass
@@ -47,6 +34,9 @@ class OrchestratorConfig:
     priority: Optional[str] = None
     since: str = "3 hours ago"
     limit: int = 100
+    execute: bool = False
+    max_alerts: int = 25
+    force_large_batch: bool = False
     servicenow_user: str = ""
     caller_id: str = ""
     contact: str = "teams"
@@ -60,15 +50,10 @@ class OrchestratorConfig:
 
 def bootstrap() -> Path:
     """Load .env and register skill import paths."""
-    env_path = PROJECT_ROOT / ".env"
-    _load_env_raw(env_path)
-
-    for skill_path in (NEWRELIC_ALERT_SKILL_PATH, SERVICENOW_INCIDENT_SKILL_PATH):
-        path_str = str(skill_path)
-        if path_str not in sys.path:
-            sys.path.insert(0, path_str)
-
-    return PROJECT_ROOT
+    return bootstrap_paths(
+        skill_paths=(NEWRELIC_ALERT_SKILL_PATH, SERVICENOW_INCIDENT_SKILL_PATH),
+        override_env=True,
+    )
 
 
 def _extract_reference_value(value: Any) -> str:
@@ -195,10 +180,20 @@ class AlertToIncidentOrchestrator:
             limit=self.config.limit,
         )
 
+        total_alerts = sum(len(alerts) for alerts in alerts_by_account.values())
+        if self.config.execute and total_alerts > self.config.max_alerts and not self.config.force_large_batch:
+            raise ValueError(
+                "Refusing to mutate alerts/incidents because alert count exceeds the allowed threshold. "
+                f"Matched={total_alerts}, threshold={self.config.max_alerts}. "
+                "Re-run with a smaller window or set --force-large-batch after review."
+            )
+
         per_alert_report: List[Dict[str, str]] = []
         acknowledged_count = 0
         raised_new_count = 0
         existing_incident_count = 0
+        planned_assignments = 0
+        planned_creations = 0
 
         for account_id, alerts in alerts_by_account.items():
             for alert in alerts:
@@ -220,6 +215,10 @@ class AlertToIncidentOrchestrator:
                     "existing_resolved",
                 }:
                     existing_incident_count += 1
+                elif incident_action == "would_create_new":
+                    planned_creations += 1
+                elif incident_action == "would_assign_unassigned":
+                    planned_assignments += 1
 
                 per_alert_report.append(
                     {
@@ -240,6 +239,8 @@ class AlertToIncidentOrchestrator:
                 "open_newrelic_alerts_acknowledged": acknowledged_count,
                 "servicenow_incidents_raised_new": raised_new_count,
                 "servicenow_incidents_acknowledged_only_already_raised": existing_incident_count,
+                "planned_servicenow_assignments": planned_assignments,
+                "planned_servicenow_incident_creations": planned_creations,
             },
         }
 
@@ -256,6 +257,9 @@ class AlertToIncidentOrchestrator:
 
         if not issue_id:
             return {"status": "error: missing issueId"}
+
+        if not self.config.execute:
+            return {"status": "dry_run", "issueId": issue_id}
 
         return self.newrelic_client.acknowledge_issue(
             account_id=account_id,
@@ -277,6 +281,8 @@ class AlertToIncidentOrchestrator:
                 return incident_number, current_assignee, "existing_resolved", resolution_notes
             if current_assignee:
                 return incident_number, current_assignee, "existing_assigned", resolution_notes
+            if not self.config.execute:
+                return incident_number, self.config.servicenow_user, "would_assign_unassigned", resolution_notes
 
             updated = self._assign_unassigned_incident(existing)
             return (
@@ -285,6 +291,9 @@ class AlertToIncidentOrchestrator:
                 "existing_unassigned_assigned",
                 resolution_notes,
             )
+
+        if not self.config.execute:
+            return "", self.config.servicenow_user, "would_create_new", ""
 
         created = self._create_new_incident(alert_title=alert_title, alert_url=alert_url)
         return (
@@ -353,22 +362,25 @@ class AlertToIncidentOrchestrator:
 
     def _find_incident_by_alert_title_and_time_window(self, alert_title: str) -> Optional[Dict[str, Any]]:
         query = self._build_incident_lookup_query(alert_title=alert_title)
-        response = self.servicenow_client._request(
-            "GET",
-            self.servicenow_client.INCIDENT_TABLE_PATH,
-            params={
-                "sysparm_query": query,
-                "sysparm_limit": max(self.config.limit * 5, 50),
-                "sysparm_order_by_desc": "sys_updated_on",
-                "sysparm_fields": (
-                    "sys_id,number,short_description,assigned_to,assignment_group,"
-                    "cmdb_ci,active,state,close_notes,sys_created_on,sys_updated_on"
-                ),
-                "sysparm_display_value": "true",
-                "sysparm_exclude_reference_link": "true",
-            },
+        query_parts = query.split("^") if query else []
+        incidents = self.servicenow_client.query_incidents(
+            query_parts=query_parts[1:],
+            limit=max(self.config.limit * 5, 50),
+            fields=[
+                "sys_id",
+                "number",
+                "short_description",
+                "assigned_to",
+                "assignment_group",
+                "cmdb_ci",
+                "active",
+                "state",
+                "close_notes",
+                "sys_created_on",
+                "sys_updated_on",
+            ],
+            order_by_desc="sys_updated_on",
         )
-        incidents = response.get("result", [])
         if not incidents:
             return None
 
@@ -397,23 +409,18 @@ class AlertToIncidentOrchestrator:
             raise ValueError("Cannot update incident without sys_id.")
 
         existing_ci = _extract_reference_value(incident.get("cmdb_ci"))
-        payload = {
-            "assigned_to": self.config.servicenow_user,
-            "category": self.config.category,
-            "subcategory": self.config.subcategory,
-            "service_offering": existing_ci,
-            "work_notes": "Auto-assigned for triage by configured ServiceNow user.",
-        }
-        response = self.servicenow_client._request(
-            "PATCH",
-            f"{self.servicenow_client.INCIDENT_TABLE_PATH}/{sys_id}",
-            json=payload,
-            params={
-                "sysparm_display_value": "true",
-                "sysparm_exclude_reference_link": "true",
+        return self.servicenow_client.update_incident_fields(
+            sys_id=sys_id,
+            fields={
+                "assigned_to": self.config.servicenow_user,
+                "category": self.config.category,
+                "subcategory": self.config.subcategory,
+                "service_offering": existing_ci,
+                "work_notes": "Auto-assigned for triage by configured ServiceNow user.",
             },
+            require_active=True,
+            forbid_resolved=True,
         )
-        return response.get("result", {})
 
     def _create_new_incident(self, *, alert_title: str, alert_url: str) -> Dict[str, Any]:
         if self.config.assignment_group not in self.servicenow_client.config.assignment_groups:
@@ -424,32 +431,22 @@ class AlertToIncidentOrchestrator:
             )
 
         short_description = _strip_quotes(alert_title)
-        payload = {
-            "caller_id": self.config.caller_id,
-            "u_contact": self.config.contact,
-            "contact_type": self.config.channel,
-            "category": self.config.category,
-            "subcategory": self.config.subcategory,
-            "service_offering": self.config.service_offering,
-            "cmdb_ci": self.config.configuration_item,
-            "assignment_group": self.config.assignment_group,
-            "assigned_to": self.config.servicenow_user,
-            "short_description": short_description,
-            "description": alert_url,
-        }
-        response = self.servicenow_client._request(
-            "POST",
-            self.servicenow_client.INCIDENT_TABLE_PATH,
-            json=payload,
-            params={
-                "sysparm_display_value": "true",
-                "sysparm_exclude_reference_link": "true",
-            },
+        return self.servicenow_client.create_incident(
+            short_description=short_description,
+            description=alert_url,
+            caller_id=self.config.caller_id,
+            assignment_group=self.config.assignment_group,
+            category=self.config.category,
+            subcategory=self.config.subcategory,
+            assigned_to=self.config.servicenow_user,
+            service_offering=self.config.service_offering,
+            cmdb_ci=self.config.configuration_item,
+            contact=self.config.contact,
+            contact_type=self.config.channel,
         )
-        return response.get("result", {})
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Acknowledge open New Relic alerts and orchestrate ServiceNow incident "
@@ -460,6 +457,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--priority", default=None, help="Optional New Relic priority filter.")
     parser.add_argument("--since", default="3 hours ago", help="NRQL SINCE expression.")
     parser.add_argument("--limit", type=int, default=100, help="Maximum alerts per account.")
+    parser.add_argument(
+        "--max-alerts",
+        type=int,
+        default=25,
+        help="Maximum alerts allowed for an execute run unless --force-large-batch is set.",
+    )
+    parser.add_argument(
+        "--force-large-batch",
+        action="store_true",
+        help="Allow execution when matched alerts exceed --max-alerts.",
+    )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Acknowledge alerts and mutate ServiceNow. Without this flag the script is read-only.",
+    )
     parser.add_argument(
         "--servicenow-user",
         default=None,
@@ -495,12 +508,23 @@ def parse_args() -> argparse.Namespace:
         default="markdown",
         help="Output format to print on screen.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--output-file",
+        default=None,
+        help="Optional path to save the final report.",
+    )
+    args = parser.parse_args(argv)
+
+    if args.limit <= 0:
+        parser.error("--limit must be greater than zero.")
+    if args.max_alerts <= 0:
+        parser.error("--max-alerts must be greater than zero.")
+    return args
 
 
-def main() -> None:
+def main(argv: Optional[List[str]] = None) -> int:
     bootstrap()
-    args = parse_args()
+    args = parse_args(argv)
 
     servicenow_user = (args.servicenow_user or os.getenv("SERVICENOW_USERNAME", "")).strip()
     caller_id = (args.caller_id or os.getenv("SERVICENOW_USERNAME", "")).strip()
@@ -521,6 +545,9 @@ def main() -> None:
             priority=args.priority,
             since=args.since,
             limit=args.limit,
+            execute=args.execute,
+            max_alerts=args.max_alerts,
+            force_large_batch=args.force_large_batch,
             servicenow_user=servicenow_user,
             caller_id=caller_id,
             contact=args.contact,
@@ -532,15 +559,24 @@ def main() -> None:
             assignment_group=args.assignment_group,
         ),
     )
+    print(f"[CONFIG] Read-only mode: {'no' if args.execute else 'yes'}")
+    print(f"[CONFIG] Alert execution threshold: {args.max_alerts}")
     result = orchestrator.run()
     if args.output_format == "json":
         import json
 
-        print(json.dumps(result, indent=2, default=str))
-        return
+        rendered = json.dumps(result, indent=2, default=str)
+    else:
+        rendered = format_markdown_report(result)
 
-    print(format_markdown_report(result))
+    if args.output_file:
+        output_path = Path(args.output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered + "\n", encoding="utf-8")
+
+    print(rendered)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

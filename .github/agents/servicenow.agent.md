@@ -171,7 +171,7 @@ Expected behavior:
 When explicitly requested, create a problem from an incident and link both records.
 
 PRB field mapping rules (mandatory):
-- `Origin task` <- incident `number` (initial incident number)
+- `Origin task` <- incident `sys_id` (reference-safe write; must display initial incident number)
 - `Category` <- `Application`
 - `Subcategory` <- `E-Commerce`
 - `Problem statement` <- incident `short_description`

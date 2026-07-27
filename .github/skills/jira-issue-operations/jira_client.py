@@ -287,7 +287,7 @@ class JiraClient:
         project_key: str,
         issue_type: str,
         summary: str,
-        description: Optional[str] = None,
+        description: Optional[Any] = None,
         assignee: Optional[str] = None,
         priority: Optional[str] = None,
         labels: Optional[List[str]] = None,
@@ -318,8 +318,16 @@ class JiraClient:
             "summary": normalized_summary,
         }
 
-        if description and description.strip():
-            fields["description"] = description.strip()
+        if isinstance(description, str):
+            if description.strip():
+                fields["description"] = description.strip()
+        elif isinstance(description, dict):
+            if description:
+                fields["description"] = description
+        elif description is not None:
+            raise JiraValidationError(
+                "description must be a non-empty string or Atlassian Document Format object."
+            )
         if assignee and assignee.strip():
             fields["assignee"] = {"id": assignee.strip()}
         if priority and priority.strip():

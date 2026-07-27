@@ -126,6 +126,10 @@ class TestDesignatedGroupMethods(unittest.TestCase):
         self.assertIn("Group A", clause)
         self.assertIn("Group B", clause)
 
+    def test_list_fields_include_vendor_ticket_fields(self):
+        self.assertIn("u_vendor_ticket", ServiceNowClient.LIST_FIELDS)
+        self.assertIn("vendor_ticket", ServiceNowClient.LIST_FIELDS)
+
 
 # ---------------------------------------------------------------------------
 # TestPriorityMatrix
@@ -319,6 +323,31 @@ class TestCreateIncidentValidation(unittest.TestCase):
                     assignment_group="Unauthorized Group",
                 )
 
+    def test_create_incident_includes_optional_operational_fields(self):
+        with patch.object(
+            self.client,
+            "_request",
+            return_value={"result": {"assignment_group": "Group A"}},
+        ) as mock_request:
+            self.client.create_incident(
+                short_description="Login broken",
+                description="Users cannot log in",
+                caller_id="jdoe",
+                assignment_group="Group A",
+                assigned_to="sn.user",
+                service_offering="Digital - Alerts",
+                cmdb_ci="Digital - Alerts",
+                contact="teams",
+                contact_type="Self-service",
+            )
+
+        payload = mock_request.call_args.kwargs["json"]
+        self.assertEqual(payload["assigned_to"], "sn.user")
+        self.assertEqual(payload["service_offering"], "Digital - Alerts")
+        self.assertEqual(payload["cmdb_ci"], "Digital - Alerts")
+        self.assertEqual(payload["u_contact"], "teams")
+        self.assertEqual(payload["contact_type"], "Self-service")
+
 
 # ---------------------------------------------------------------------------
 # TestListIncidentsValidation
@@ -350,6 +379,117 @@ class TestListIncidentsValidation(unittest.TestCase):
         with self._patch_request():
             with self.assertRaises(ServiceNowValidationError):
                 self.client.list_incidents(assignment_group="Unlisted Group")
+
+    def test_list_incidents_uses_assigned_to_user_name_for_username(self):
+        with patch.object(self.client, "_request", return_value={"result": []}) as mock_request:
+            self.client.list_incidents(assigned_to="Igor.Gunia")
+
+        params = mock_request.call_args.kwargs["params"]
+        self.assertIn("assigned_to.user_name=Igor.Gunia", params["sysparm_query"])
+
+    def test_list_incidents_uses_assigned_to_for_sys_id(self):
+        sys_id = "0123456789abcdef0123456789abcdef"
+        with patch.object(self.client, "_request", return_value={"result": []}) as mock_request:
+            self.client.list_incidents(assigned_to=sys_id)
+
+        params = mock_request.call_args.kwargs["params"]
+        self.assertIn(f"assigned_to={sys_id}", params["sysparm_query"])
+
+    def test_query_incidents_applies_scope_and_custom_parts(self):
+        with patch.object(self.client, "_request", return_value={"result": []}) as mock_request:
+            self.client.query_incidents(
+                query_parts=["active=true", "short_descriptionSTARTSWITHTriggered : "],
+                limit=25,
+                fields=["sys_id", "number"],
+                exclude_resolved=True,
+            )
+
+        params = mock_request.call_args.kwargs["params"]
+        self.assertIn("assignment_group.nameIN", params["sysparm_query"])
+        self.assertIn("active=true", params["sysparm_query"])
+        self.assertIn("state!=6", params["sysparm_query"])
+        self.assertEqual(params["sysparm_fields"], "sys_id,number")
+
+
+# ---------------------------------------------------------------------------
+# TestIncidentUpdateHelpers
+# ---------------------------------------------------------------------------
+
+class TestIncidentUpdateHelpers(unittest.TestCase):
+
+    def setUp(self):
+        self.client = _make_client()
+
+    def test_update_incident_fields_rejects_empty_fields(self):
+        with self.assertRaises(ServiceNowValidationError):
+            self.client.update_incident_fields(incident_number="INC0012345", fields={})
+
+    def test_update_incident_fields_rejects_resolved_incident_when_forbidden(self):
+        incident = {
+            "sys_id": "a" * 32,
+            "assignment_group": "Group A",
+            "state": "Resolved",
+            "active": "false",
+        }
+        with patch.object(self.client, "_find_incident", return_value=incident):
+            with self.assertRaises(ServiceNowValidationError):
+                self.client.update_incident_fields(
+                    incident_number="INC0012345",
+                    fields={"category": "Application"},
+                    forbid_resolved=True,
+                )
+
+    def test_update_incident_fields_patches_payload(self):
+        incident = {
+            "sys_id": "a" * 32,
+            "assignment_group": "Group A",
+            "state": "In Progress",
+            "active": "true",
+        }
+        updated = {
+            "sys_id": "a" * 32,
+            "assignment_group": "Group A",
+            "category": "Application",
+        }
+        with patch.object(self.client, "_find_incident", return_value=incident):
+            with patch.object(self.client, "_request", return_value={"result": updated}) as mock_request:
+                result = self.client.update_incident_fields(
+                    incident_number="INC0012345",
+                    fields={"category": "Application", "work_notes": "note"},
+                )
+
+        self.assertEqual(result["category"], "Application")
+        self.assertEqual(mock_request.call_args.args[0], "PATCH")
+        self.assertEqual(mock_request.call_args.kwargs["json"]["category"], "Application")
+
+    def test_resolve_incident_with_updates_sets_vendor_ticket_fields(self):
+        incident = {
+            "sys_id": "a" * 32,
+            "assignment_group": "Group A",
+            "state": "In Progress",
+            "active": "true",
+        }
+        updated = {
+            "sys_id": "a" * 32,
+            "assignment_group": "Group A",
+            "state": "Resolved",
+            "u_vendor_ticket": "DDL-29601",
+            "vendor_ticket": "DDL-29601",
+        }
+        with patch.object(self.client, "_find_incident", return_value=incident):
+            with patch.object(self.client, "_request", return_value={"result": updated}) as mock_request:
+                result = self.client.resolve_incident_with_updates(
+                    incident_number="INC0012345",
+                    close_code="Fixed",
+                    close_notes="Implemented remediation and verified recovery for the affected service.",
+                    vendor_ticket="DDL-29601",
+                    category="Application",
+                )
+
+        payload = mock_request.call_args.kwargs["json"]
+        self.assertEqual(payload["u_vendor_ticket"], "DDL-29601")
+        self.assertEqual(payload["vendor_ticket"], "DDL-29601")
+        self.assertEqual(result["state"], "Resolved")
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +544,26 @@ class TestIssueRoutingFromProblem(unittest.TestCase):
                 )
         self.assertEqual(result["availability"], "conditionally_available")
 
+    def test_problem_fields_include_origin_task_for_jira_handoff(self):
+        self.assertIn("origin_task", ServiceNowClient.PROBLEM_FIELDS)
+
+    def test_derive_incident_number_from_problem_prefers_origin_task(self):
+        problem = {"origin_task": "INC0001234", "description": "Raised from incident INC9999999"}
+        self.assertEqual(
+            ServiceNowClient._derive_incident_number_from_problem(problem),
+            "INC0001234",
+        )
+
+    def test_derive_incident_number_from_problem_falls_back_to_description(self):
+        problem = {
+            "origin_task": "",
+            "description": "Raised from incident INC0054908. Investigation required.",
+        }
+        self.assertEqual(
+            ServiceNowClient._derive_incident_number_from_problem(problem),
+            "INC0054908",
+        )
+
     def test_create_issue_with_routing_returns_handoff_when_unavailable(self):
         with patch.object(
             self.client,
@@ -431,6 +591,33 @@ class TestIssueRoutingFromProblem(unittest.TestCase):
         self.assertEqual(routed["route_used"], "jira_agent_delegation")
         self.assertEqual(routed["handoff"]["required_issue_type"], "Problem")
 
+    def test_create_issue_with_routing_derives_incident_number_when_origin_task_missing(self):
+        with patch.object(
+            self.client,
+            "detect_native_jira_from_problem_capability",
+            return_value={
+                "availability": "unavailable",
+                "mode": "unavailable",
+                "recommended_route": "jira_agent_delegation",
+            },
+        ):
+            with patch.object(
+                self.client,
+                "_find_problem",
+                return_value={
+                    "number": "PRB0001",
+                    "origin_task": "",
+                    "short_description": "Problem from INC0054908: sample",
+                    "problem_statement": "",
+                    "description": "Raised from incident INC0054908.",
+                },
+            ):
+                routed = self.client.create_issue_from_problem_with_routing(
+                    problem_number="PRB0001",
+                    routing_project="DDL",
+                )
+        self.assertEqual(routed["handoff"]["incident_number"], "INC0054908")
+
     def test_create_issue_with_routing_uses_native_when_available(self):
         with patch.object(
             self.client,
@@ -448,6 +635,62 @@ class TestIssueRoutingFromProblem(unittest.TestCase):
                 )
         self.assertEqual(routed["route_used"], "servicenow_native_jira")
         native_call.assert_called_once()
+
+class TestProblemCreationMapping(unittest.TestCase):
+
+    def setUp(self):
+        self.client = _make_client()
+
+    def test_create_problem_from_incident_sets_origin_task_with_incident_sys_id(self):
+        incident_sys_id = "a" * 32
+        incident = {
+            "sys_id": incident_sys_id,
+            "number": "INC0054908",
+            "short_description": "Payment webhook failures",
+            "description": "Repeated payment callback failures from provider.",
+            "assignment_group": "Group A",
+            "cmdb_ci": "Digital - New Relic Alerts - ODP",
+        }
+
+        created_problem_response = {
+            "result": {
+                "sys_id": "b" * 32,
+                "number": "PRB0040370",
+                "origin_task": {
+                    "value": incident_sys_id,
+                    "display_value": "INC0054908",
+                },
+            }
+        }
+        updated_incident_response = {
+            "result": {
+                "sys_id": incident_sys_id,
+                "number": "INC0054908",
+                "problem_id": "b" * 32,
+            }
+        }
+
+        with patch.object(self.client, "_find_incident", return_value=incident):
+            with patch.object(
+                self.client,
+                "_request",
+                side_effect=[created_problem_response, updated_incident_response],
+            ) as request_mock:
+                result = self.client.create_problem_from_incident(incident_number="INC0054908")
+
+        first_call = request_mock.call_args_list[0]
+        self.assertEqual(first_call.args[0], "POST")
+        self.assertEqual(first_call.args[1], ServiceNowClient.PROBLEM_TABLE_PATH)
+        self.assertEqual(first_call.kwargs["json"]["origin_task"], incident_sys_id)
+        self.assertEqual(
+            first_call.kwargs["params"]["sysparm_input_display_value"],
+            "true",
+        )
+
+        self.assertEqual(
+            result["problem"]["origin_task"]["display_value"],
+            "INC0054908",
+        )
 
 
 if __name__ == "__main__":

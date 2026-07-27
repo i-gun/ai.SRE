@@ -1,9 +1,15 @@
-# ServiceNow Prompt: Strict Incident to Problem to Issue Flow (Native-Jira Preferred)
+---
+name: "Incident to Problem to Issue Flow"
+description: "Run a deterministic incident enrichment, fresh problem creation, native ServiceNow->Jira routing when available, Jira-agent delegation otherwise, and strict incident resolution."
+agent: "ServiceNow"
+---
 
-Use this prompt with the ServiceNow agent to run a deterministic incident enrichment, fresh problem creation, native ServiceNow-to-Jira issue routing when available, Jira-agent delegation otherwise, and strict incident resolution flow.
+# ServiceNow Prompt: Strict Incident to Problem to Issue Flow (Native ServiceNow->Jira Preferred)
+
+Use this prompt with the ServiceNow agent to run deterministic incident enrichment, fresh problem creation, native ServiceNow->Jira routing when available, Jira-agent delegation otherwise, and strict incident resolution.
 
 ```text
-@ServiceNow, process incident <INC_NUMBER> with requested priority <TARGET_PRIORITY> and execute strict incident -> problem -> issue flow (native ServiceNow Jira preferred, Jira agent fallback).
+@ServiceNow, process incident <INC_NUMBER> with requested priority <TARGET_PRIORITY> and execute strict incident -> problem -> issue flow (native ServiceNow->Jira preferred, Jira-agent fallback).
 
 STRICT EXECUTION POLICY (must follow in order):
 
@@ -50,7 +56,7 @@ STRICT EXECUTION POLICY (must follow in order):
    - Link incident.problem_id to the newly created PRB sys_id
 
 7) Problem field requirements (on create):
-   - Origin task = <Incident_Number> (required)
+   - Origin task = <Incident reference> (required; set via incident sys_id so the Problem form displays the correct Incident Number)
    - Category = <Incident_Category> (required)
    - Subcategory = <Incident_Subcategory> (required)
    - Service offering = <Incident_Service_offering> (required)
@@ -58,14 +64,15 @@ STRICT EXECUTION POLICY (must follow in order):
    - Assignment group = "IT - Epam - L2 - ODP" (required)
    - Problem statement = <Incident_Short_description> (required)
    - Description = <Incident_Description> (required)
+   - Verify Origin task displays the expected incident number after create; fail the flow if it is blank or mismatched
    - Backpropagate problem number to incident field Problem
 
-8) Preferred issue creation route = native ServiceNow -> Jira from PRB (capability-gated):
+8) Preferred issue creation route = native ServiceNow->Jira from PRB (capability-gated):
     - Route by final incident priority:
-       - P3 -> routing_project=DDL (Digital Delivery)
-       - P4 or P5 -> routing_project=ODPT (One Digital Platform)
+       - P3 -> routing_project=DDL
+       - P4 or P5 -> routing_project=ODPT
        - P1 or P2 -> ask explicit routing confirmation before project selection
-    - Required issue type for DDL and ODPT routes = `Problem`
+    - Required issue type for DDL/ODPT routes = `Problem`
     - Run native capability detection from Problem context
     - If native capability is `available`:
        - execute native ServiceNow->Jira creation path from PRB
@@ -95,12 +102,12 @@ STRICT EXECUTION POLICY (must follow in order):
      - number, created_mode, status
    - issue:
        - route_used (servicenow_native_jira | jira_agent_delegation)
-     - number_or_key
+       - number_or_key
        - required_issue_type
        - issue_type_verified
-     - project
-     - url
-     - status
+       - project
+       - url
+       - status
    - overall_status: success | partial_success | skipped | failed
    - failure_reason (if not success)
 
@@ -114,4 +121,4 @@ Do not use Confluence or any external knowledge source for this operation.
 ```
 
 Example:
-`@ServiceNow, process incident INC0044438 with requested priority P3 and execute strict incident -> problem -> issue flow (native ServiceNow Jira preferred, Jira agent fallback).`
+`@ServiceNow, process incident INC0044438 with requested priority P3 and execute strict incident -> problem -> issue flow (native ServiceNow->Jira preferred, Jira-agent fallback).`

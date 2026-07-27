@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import sys
 import unittest
 from datetime import datetime
@@ -18,6 +20,7 @@ from newrelic_servicenow_alert_orchestrator import (  # noqa: E402
     OrchestratorConfig,
     _strip_quotes,
     format_markdown_report,
+    parse_args,
 )
 
 
@@ -69,10 +72,69 @@ class _FakeSNClient:
 
         raise AssertionError(f"Unexpected request: {method} {path}")
 
+    def query_incidents(
+        self,
+        *,
+        query_parts,
+        assignment_group=None,
+        limit=50,
+        fields=None,
+        order_by_desc="sys_updated_on",
+        exclude_resolved=False,
+    ):
+        params = {
+            "sysparm_query": "^".join(query_parts),
+            "sysparm_limit": limit,
+            "sysparm_fields": ",".join(fields or []),
+            "sysparm_order_by_desc": order_by_desc,
+        }
+        return self._request("GET", self.INCIDENT_TABLE_PATH, params=params).get("result", [])
+
+    def update_incident_fields(self, *, sys_id=None, fields=None, require_active=False, forbid_resolved=False, incident_number=None):
+        return self._request("PATCH", f"{self.INCIDENT_TABLE_PATH}/{sys_id or incident_number}", json=fields)
+
+    def create_incident(
+        self,
+        *,
+        short_description,
+        description,
+        caller_id,
+        assignment_group=None,
+        category=None,
+        subcategory=None,
+        assigned_to=None,
+        service_offering=None,
+        cmdb_ci=None,
+        contact=None,
+        contact_type=None,
+        impact="3",
+        urgency="3",
+        work_note=None,
+    ):
+        payload = {
+            "short_description": short_description,
+            "description": description,
+            "caller_id": caller_id,
+            "assignment_group": assignment_group,
+            "category": category,
+            "subcategory": subcategory,
+            "assigned_to": assigned_to,
+            "service_offering": service_offering,
+            "cmdb_ci": cmdb_ci,
+            "u_contact": contact,
+            "contact_type": contact_type,
+            "impact": impact,
+            "urgency": urgency,
+        }
+        if work_note:
+            payload["work_notes"] = work_note
+        return self._request("POST", self.INCIDENT_TABLE_PATH, json=payload).get("result", {})
+
 
 class TestAlertOrchestrationDecisions(unittest.TestCase):
     def _config(self):
         return OrchestratorConfig(
+            execute=True,
             servicenow_user="sn_integration_user",
             caller_id="sn_integration_user",
         )
@@ -218,9 +280,74 @@ class TestAlertOrchestrationDecisions(unittest.TestCase):
             alert_title="Digital Operations - Checkout errors",
             now=datetime(2026, 7, 17, 20, 0, 0),
         )
-        self.assertIn("short_descriptionLIKEDigital", query)
+        self.assertIn("short_descriptionSTARTSWITHDigital Operations - Checkout errors", query)
         self.assertIn("sys_created_on>=2026-07-17 17:00:00", query)
         self.assertIn("sys_created_on<=2026-07-17 20:00:00", query)
+
+    def test_dry_run_does_not_acknowledge_or_mutate(self):
+        nr_client = _FakeNRClient(self._nr_alerts())
+        sn_client = _FakeSNClient(existing_incidents=None)
+        orchestrator = AlertToIncidentOrchestrator(
+            newrelic_client=nr_client,
+            servicenow_client=sn_client,
+            config=OrchestratorConfig(
+                execute=False,
+                servicenow_user="sn_integration_user",
+                caller_id="sn_integration_user",
+            ),
+        )
+
+        result = orchestrator.run()
+        self.assertEqual(result["report"][0]["acknowledgement_status"], "dry_run")
+        self.assertEqual(result["summary"]["open_newrelic_alerts_acknowledged"], 0)
+        self.assertEqual(result["summary"]["planned_servicenow_incident_creations"], 1)
+        self.assertEqual(sn_client.patch_payloads, [])
+        self.assertEqual(sn_client.post_payloads, [])
+
+    def test_execute_gate_blocks_large_batches(self):
+        alerts = {
+            1679802: [
+                {
+                    "issueId": f"issue-{index}",
+                    "title": f"Digital Operations - Checkout errors {index}",
+                    "issueLink": f"https://one.newrelic.com/alerts/issue-{index}",
+                }
+                for index in range(3)
+            ]
+        }
+        orchestrator = AlertToIncidentOrchestrator(
+            newrelic_client=_FakeNRClient(alerts),
+            servicenow_client=_FakeSNClient(existing_incidents=None),
+            config=OrchestratorConfig(
+                execute=True,
+                max_alerts=2,
+                servicenow_user="sn_integration_user",
+                caller_id="sn_integration_user",
+            ),
+        )
+
+        with self.assertRaises(ValueError):
+            orchestrator.run()
+
+
+class TestOrchestratorCLI(unittest.TestCase):
+
+    def _config(self):
+        return OrchestratorConfig(
+            execute=True,
+            servicenow_user="sn_integration_user",
+            caller_id="sn_integration_user",
+        )
+
+    def test_parse_args_defaults_to_read_only(self):
+        args = parse_args([])
+        self.assertFalse(args.execute)
+        self.assertEqual(args.max_alerts, 25)
+
+    def test_parse_args_rejects_invalid_limit(self):
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                parse_args(["--limit", "0"])
 
     def test_quote_and_separator_differences_still_match_same_incident(self):
         sn_client = _FakeSNClient(

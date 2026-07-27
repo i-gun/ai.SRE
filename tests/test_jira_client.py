@@ -201,6 +201,29 @@ class TestCreateIssueValidation(unittest.TestCase):
         self.assertIn("backend", fields["labels"])
         self.assertEqual(fields["components"], [{"name": "API"}])
 
+    def test_adf_description_payload_is_passed_through(self):
+        adf_description = {
+            "type": "doc",
+            "version": 1,
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [{"type": "text", "text": "Full description here"}],
+                }
+            ],
+        }
+        with self._patch_issue_type_preflight(issue_types=["Problem"]):
+            with self._patch_request() as mock_req:
+                self.client.create_issue(
+                    project_key="TEST",
+                    issue_type="Problem",
+                    summary="New escalation",
+                    description=adf_description,
+                )
+        _, kwargs = mock_req.call_args
+        fields = kwargs["json"]["fields"]
+        self.assertEqual(fields["description"], adf_description)
+
     def test_preflight_rejects_unavailable_issue_type(self):
         with self._patch_issue_type_preflight(issue_types=["Bug", "Task"]):
             with self.assertRaises(JiraValidationError):

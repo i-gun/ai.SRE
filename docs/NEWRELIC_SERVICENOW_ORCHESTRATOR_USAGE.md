@@ -27,6 +27,13 @@ For each open unacknowledged New Relic alert in scoped account `1679802`:
      - Open New Relic alerts acknowledged
      - ServiceNow incidents raised (new)
      - ServiceNow incidents acknowledged only (already raised)
+  - Planned ServiceNow assignments/creations when running in read-only mode
+
+## Safety model
+
+- Default mode is read-only.
+- Use `--execute` to acknowledge alerts and mutate ServiceNow.
+- Execute runs are blocked when matched alerts exceed the threshold from `--max-alerts` unless `--force-large-batch` is provided.
 
 ## Prerequisites
 
@@ -44,15 +51,17 @@ For each open unacknowledged New Relic alert in scoped account `1679802`:
 python scripts\orchestration\newrelic_servicenow_alert_orchestrator.py
 ```
 
-Default output is Markdown/plain text on screen.
+Default output is Markdown/plain text on screen in read-only mode.
 
 ## Run with explicit overrides
 
 ```bash
 python scripts\orchestration\newrelic_servicenow_alert_orchestrator.py ^
+  --execute ^
   --policy-prefix "Digital Operations" ^
   --since "6 hours ago" ^
   --limit 100 ^
+  --max-alerts 25 ^
   --servicenow-user "sn_integration_user" ^
   --caller-id "sn_integration_user" ^
   --contact "teams" ^
@@ -66,6 +75,7 @@ python scripts\orchestration\newrelic_servicenow_alert_orchestrator.py ^
 
 - Default: `--output-format markdown`
 - Optional JSON: `--output-format json`
+- Optional file output: `--output-file artifacts\orchestration\last_run_report.json`
 
 ## Run from UI chat (no terminal)
 
@@ -80,7 +90,7 @@ Use these prompts directly in Copilot Chat:
 ```
 
 ```text
-@Advisor, run the orchestrator and save output to scripts\orchestration\last_run_report.json, then show me a summary.
+@Advisor, run the orchestrator and save output to artifacts\orchestration\last_run_report.json, then show me a summary.
 ```
 
 ## Example output shape

@@ -148,7 +148,7 @@ Create a problem from an existing incident and link records.
 Behavior:
 - Resolve incident by `number` or `sys_id`
 - Create `problem` record with required mapping:
-    - `origin_task` <- incident `number`
+    - `origin_task` <- incident `sys_id` (reference-safe write; displays incident `number` on Problem form)
     - `category` <- `Application`
     - `subcategory` <- `E-Commerce`
     - `problem_statement` <- incident `short_description`

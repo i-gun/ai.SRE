@@ -1,16 +1,16 @@
 ---
-name: "ServiceNow Resolve Gigya Incidents"
-description: "Resolve active non-resolved Gigya incidents in scoped assignment groups with standardized closure fields and strict resolved-state filtering."
+name: "ServiceNow Resolve SFSC Incidents"
+description: "Resolve active non-resolved SFSC incidents in scoped assignment groups with standardized closure fields and strict resolved-state filtering."
 argument-hint: "Optional override: change Jira ticket/vendor ticket or refine short-description prefix before running."
 agent: "ServiceNow"
 ---
 
-# ServiceNow Prompt: Resolve Active Non-Resolved Gigya Incidents
+# ServiceNow Prompt: Resolve Active Non-Resolved SFSC Incidents
 
-Use this prompt with the ServiceNow agent to find active, non-resolved Gigya incidents in scoped groups and resolve them with standardized closure fields.
+Use this prompt with the ServiceNow agent to find active, non-resolved SFSC incidents in scoped groups and resolve them with standardized closure fields.
 
 ```text
-@ServiceNow, fetch all active incidents not in state 'Resolved' in my scoped assignment groups where short description starts with "accounts.verifyEmail query result is >", assign to your configured user if unassigned, then resolve each incident.
+@ServiceNow, fetch all active incidents not in state 'Resolved' in my scoped assignment groups where short description starts with "data-import.sfscloud-sbq query result is > 0.0 for 15 minutes on  - ASB - Queue - Deadletter Messages > 0", assign to your configured user if unassigned, then resolve each incident.
 
 Requirements:
 1) List matching incidents first (number, short description, priority, assignment group, sys_id, state).
@@ -19,9 +19,10 @@ Requirements:
 4) For each matched incident, update:
    - Category = 'Application'
    - Subcategory = 'E-Commerce'
-   - Service offering = 'Gigya'
-   - Vendor Ticket = 'DDL-31876'
-   - Close notes = 'RCA and remediation implementation is under scope of Jira ticket https://canadian-tire.atlassian.net/browse/DDL-31876.'
+   - Service offering = 'ODP Azure Service Bus'
+   - Problem = 'PRB0040370'
+   - Vendor Ticket = 'DDL-38612'
+   - Close notes = 'No impact on store hours submission. Referenced store is non-existent, messages may safely be discarded from DLQ. Resolution under scope of PRB0040370 / DDL-38612'
    - State = 'Resolved'
    - Resolution code = 'Fixed'
 5) Return a final summary with:

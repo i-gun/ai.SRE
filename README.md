@@ -34,6 +34,7 @@ Agents automatically handle credential loading, validation, and error handling.
 ### Development & Governance
 - **Integration Governance** — See [INTEGRATION_GOVERNANCE.md](docs/INTEGRATION_GOVERNANCE.md) for credential handling, script placement, and best practices
 - **Hook Setup** — See [GIT_HOOKS_IMPLEMENTATION.md](docs/GIT_HOOKS_IMPLEMENTATION.md) for automated documentation and formatting
+- **ServiceNow Resolve Prompt Pack** — See [README-SN-RESOLVE.md](.github/prompts/README-SN-RESOLVE.md) for reusable Gigya, RTCDP, and SFSC incident resolution prompts
 
 ## Project Structure
 
@@ -84,24 +85,41 @@ Agents automatically handle credential loading, validation, and error handling.
 │           └── azuregit_client.py
 ├── docs/                    # Project and implementation documentation
 │   ├── GIT_HOOKS_IMPLEMENTATION.md
-│   └── GITTER_CREDENTIALS_SKILL_SUMMARY.md
-├── scripts/                 # Operational and diagnostic scripts
+│   ├── GITTER_CREDENTIALS_SKILL_SUMMARY.md
+│   ├── INTEGRATION_GOVERNANCE.md
+│   └── NEWRELIC_SERVICENOW_ORCHESTRATOR_USAGE.md
+├── scripts/                 # Core operational scripts
 │   └── confluence/
 │       ├── common.py
 │       ├── search_space_pages.py
 │       ├── search_content.py
 │       └── build_service_flow_graph.py
+│   └── newrelic/
+│       ├── common.py
+│       ├── search_logs.py
+│       ├── analyze_trends.py
+│       ├── trace_dependencies.py
+│       └── root_cause_analysis.py
+│   └── orchestration/
+│       └── newrelic_servicenow_alert_orchestrator.py
 │   └── servicenow/
 │       ├── common.py
+│       ├── batch_resolve_triggered_incidents.py
 │       ├── create_issue_from_problem.py
-│       ├── diagnose_issue_table.py
-│       ├── execute_incident_operations.py
-│       ├── resolve_incident_script.py
-│       ├── search_final_resolved_incidents.py
-│       ├── search_resolved_incidents.py
-│       └── test_query_variations.py
+├── artifacts/               # Temporary and archived diagnostics
+│   └── servicenow/
+│       └── archive/
+│           ├── diagnose_issue_table.py
+│           ├── execute_incident_operations.py
+│           ├── resolve_incident_script.py
+│           ├── search_final_resolved_incidents.py
+│           ├── search_resolved_incidents.py
+│           └── test_query_variations.py
 ├── tests/
-│   └── test_confluence_client.py
+│   ├── test_confluence_client.py
+│   ├── test_newrelic_servicenow_alert_orchestrator.py
+│   ├── test_servicenow_client.py
+│   └── test_servicenow_scripts.py
 ├── git-hooks/               # Hook sources tracked in repo
 ├── .env.template            # Environment configuration template
 ├── .env.example             # Example configuration
@@ -161,6 +179,21 @@ Read-only Azure DevOps Git operations for repository discovery, file listing, co
 ### Confluence Scripts & Tests
 - Helper scripts in `scripts/confluence/` support page browsing, CQL search, and service-flow graph generation.
 - Unit tests in `tests/test_confluence_client.py` validate graph extraction and CQL space-scoping behavior.
+
+### ServiceNow Script Safety
+- Core mutation scripts under `scripts/servicenow/` are parameterized and default to read-only mode.
+- Use explicit execution flags only after reviewing listed records and input values.
+
+### Orchestration Script Safety
+- Cross-system mutation scripts under `scripts/orchestration/` also default to read-only mode.
+- Use explicit execution flags and alert-count thresholds before acknowledging alerts or creating/updating incidents.
+
+### Test Commands
+- Run the full suite with `python -m unittest discover -s tests`.
+- Use targeted module runs for focused validation while editing individual integrations.
+
+### CI Validation
+- GitHub Actions runs the discovered Python unit test suite on pushes and pull requests via [.github/workflows/python-tests.yml](.github/workflows/python-tests.yml).
 
 ## File Changes Log
 

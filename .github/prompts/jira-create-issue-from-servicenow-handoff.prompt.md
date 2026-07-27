@@ -46,29 +46,29 @@ STRICT EXECUTION POLICY:
    - Include concise remediation ownership statement
 
 4) Apply mapping by route:
-   DDL route:
-   - Labels: L2toL3, ODP, SRE
-   - Banner: CanadianTire
-   - Priority: Major
-   - Team: Site Reliability Engineering
-   - ServiceNow Priority: <Incident_Priority>
-   - ServiceNow #: <Problem_Number>, <Incident_Number>
+   - DDL route:
+     - Labels: L2toL3, ODP, SRE
+     - Banner: CanadianTire
+     - Priority: Major
+     - Team: Site Reliability Engineering
+     - ServiceNow Priority: <Incident_Priority>
+     - ServiceNow #: <Problem_Number>, <Incident_Number>
 
-   ODPT route:
-   - Labels: L2toL3, ODP
-   - Banner: CanadianTire
-   - Priority: Minor
-   - ServiceNow Priority: <Incident_Priority>
-   - ServiceNow #: <Problem_Number>, <Incident_Number>
+   - ODPT route:
+     - Labels: L2toL3, ODP
+     - Banner: CanadianTire
+     - Priority: Minor
+     - ServiceNow Priority: <Incident_Priority>
+     - ServiceNow #: <Problem_Number>, <Incident_Number>
 
 4.1) Team mapping execution strategy (required for DDL route):
-    - Use a two-phase write for Team:
-       - Phase A: create issue with non-Team fields.
-       - Phase B: update Team using `customfield_11002` with resolved team UUID.
-    - Team UUID resolution order:
-       - First: trusted configured UUID (if provided by policy/runtime context).
-       - Second: derive from live project issue history where Team is populated and name matches.
-    - If Team UUID cannot be resolved, return `partial_success` only if issue creation and all other strict mappings are verified.
+   - Use a two-phase write for Team:
+     - Phase A: create issue with non-Team fields.
+     - Phase B: update Team using `customfield_11002` with resolved team UUID.
+   - Team UUID resolution order:
+     - First: trusted configured UUID (if provided by policy/runtime context).
+     - Second: derive from live project issue history where Team is populated and name matches.
+   - If Team UUID cannot be resolved, return `partial_success` only if issue creation and all other strict mappings are verified.
 
 5) Verify create/update:
    - Re-fetch issue and verify labels and mapped fields
