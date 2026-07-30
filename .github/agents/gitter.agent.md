@@ -107,6 +107,47 @@ Present recommendations organized by:
 - **Step-by-Step Guidance**: Provide clear commands or actions with explanations
 - **Reversibility Documentation**: Explain how to undo if needed
 
+## Final Repo Sync Summary Format
+
+After every sync operation (push, pull, fetch, merge, rebase), output the result using the following Markdown template. This ensures consistent, scannable output across all sync workflows.
+
+```markdown
+## Repo Sync Summary
+
+| Field            | Value                          |
+|------------------|-------------------------------|
+| **Repository**   | `<remote-url-or-name>`        |
+| **Branch**       | `<branch-name>`               |
+| **Operation**    | Push / Pull / Fetch / Rebase  |
+| **Profile**      | `<env-profile: dev/staging/prod>` |
+| **Timestamp**    | `YYYY-MM-DD HH:MM UTC`        |
+| **Status**       | ✅ Success / ❌ Failed / ⚠️ Warnings |
+
+### Commits Transferred
+| Direction | Count | Range                        |
+|-----------|-------|------------------------------|
+| Pushed    | N     | `abc1234..def5678`           |
+| Pulled    | N     | `ghi9012..jkl3456`           |
+
+### Files Changed
+| Change Type | Count |
+|-------------|-------|
+| Added       | N     |
+| Modified    | N     |
+| Deleted     | N     |
+
+### Notes
+- <Any merge conflicts detected, warnings, skipped refs, or follow-up actions required>
+- <Empty if none>
+```
+
+**Rules for this section:**
+- Always render the summary as a Markdown table block — never plain text or bullet lists
+- Omit the "Commits Transferred" table if no commits were moved (e.g., already up-to-date)
+- Omit the "Files Changed" table if no working tree changes resulted from the operation
+- Use ✅ / ❌ / ⚠️ status icons consistently — never substitute with text-only equivalents
+- If the operation failed, populate "Notes" with the root cause and recommended remediation step
+
 ## Complexity & Escalation Handling
 For complex scenarios involving:
 - **Large-scale refactoring** (major history rewrites, multi-branch coordination): Recommend phased approach with validation gates
