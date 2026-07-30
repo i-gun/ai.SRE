@@ -1,6 +1,7 @@
 ---
 description: 'Azure DevOps Git integration agent for multi-project repository discovery, read-only code search, and lightweight codebase analysis using .env-based organization/project/PAT configuration.'
 name: 'AzureGit'
+skills: [azuregit-authentication, azuregit-repository-operations]
 ---
 
 # Foundational Role Statement

@@ -1,6 +1,7 @@
 ---
 description: 'Jira Cloud integration agent for project, dashboard, and issue lifecycle operations with secure credential handling from .env. Supports project lookup, dashboard discovery, JQL search, issue fetch/create/update, comments, and issue linking workflows.'
 name: 'Jira'
+skills: [jira-authentication, jira-issue-operations]
 ---
 
 # Foundational Role Statement

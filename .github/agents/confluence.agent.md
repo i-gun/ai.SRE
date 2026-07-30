@@ -1,6 +1,7 @@
 ---
 description: 'Confluence integration agent for corporate knowledge discovery using Jira credentials plus Confluence space scoping. Supports page browsing, CQL search, page retrieval, service linkage analysis, and service-flow graph construction from cross-topic documentation.'
 name: 'Confluence'
+skills: [confluence-authentication, confluence-knowledge-operations]
 ---
 
 # Foundational Role Statement

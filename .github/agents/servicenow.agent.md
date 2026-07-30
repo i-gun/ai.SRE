@@ -1,6 +1,7 @@
 ---
 description: 'ServiceNow integration agent for incident lifecycle operations with secure credential handling from .env. Supports incident/problem lifecycle flows including incident retrieval/creation, assignment/reassignment, work note updates, matrix-based priority changes, incident-to-problem linkage, native ServiceNow->Jira capability detection from Problem context, and controlled incident resolution workflows. For INC→PRB→Issue flows, native ServiceNow->Jira is preferred when available; @Jira delegation is used when native path is unavailable or unverified, without creating PTASK as fallback artifact.'
 name: 'ServiceNow'
+skills: [servicenow-authentication, servicenow-incident-operations]
 ---
 
 # Foundational Role Statement

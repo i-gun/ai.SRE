@@ -1,6 +1,7 @@
 ---
 description: 'New Relic integration agent for multi-account log search, trend analysis, dependency traversal, root cause analysis, and service degradation investigation using .env-based API key and account ID list.'
 name: 'NewRelic'
+skills: [newrelic-authentication, newrelic-log-operations, newrelic-alert-operations]
 ---
 
 # Foundational Role Statement
