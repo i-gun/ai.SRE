@@ -23,6 +23,16 @@ Security rules:
 
 ## Supported Operations
 
+### 0. Refresh Project/Repository Mapping Artifact
+Refresh and persist a project/repository mapping snapshot when mapping data is requested.
+
+Behavior:
+- Uses `scripts/azuregit/fetch_repo_map.py`
+- Writes to `artifacts/azuregit_repo_map.json`
+- Supports forced refresh (`--force-refresh`) for latest mapping
+- Supports cache freshness threshold (`--max-age-hours`)
+- Returns mapping metadata (`generated_at`, `organization`, project and repository counts)
+
 ### 1. Lookup Repositories
 Retrieve repositories across one or all scoped projects.
 
@@ -82,6 +92,9 @@ Behavior:
 
 Use [azuregit_client.py](azuregit_client.py) for operational code.
 
+Mapping refresh script:
+- `scripts/azuregit/fetch_repo_map.py`
+
 Core methods:
 - `list_repositories(...)`
 - `get_repository(...)`
@@ -89,3 +102,5 @@ Core methods:
 - `fetch_file_content(...)`
 - `search_code(...)`
 - `analyze_repository_structure(...)`
+- `generate_repository_map(...)`
+- `ensure_repository_map(...)`

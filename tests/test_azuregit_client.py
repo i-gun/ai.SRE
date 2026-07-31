@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -163,6 +166,82 @@ class TestAzureGitClientRepositoryMethods(unittest.TestCase):
         result = self.client.search_code(query="target marker", project="project_1")
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["path"], "/src/app.py")
+
+
+class TestAzureGitRepositoryMap(unittest.TestCase):
+    def setUp(self) -> None:
+        self.client = _make_client()
+
+    @patch.object(AzureGitClient, "list_repositories")
+    def test_generate_repository_map_returns_expected_shape(self, mock_list_repositories) -> None:
+        mock_list_repositories.return_value = {
+            "project_1": [
+                {
+                    "id": "repo-1",
+                    "name": "repo-one",
+                    "defaultBranch": "refs/heads/main",
+                    "size": 123,
+                    "remoteUrl": "https://example/repo-one",
+                }
+            ]
+        }
+
+        mapping = self.client.generate_repository_map()
+
+        self.assertEqual(mapping["organization"], "my-org")
+        self.assertIn("generated_at", mapping)
+        self.assertIn("project_1", mapping["projects"])
+        self.assertEqual(mapping["projects"]["project_1"][0]["name"], "repo-one")
+
+    @patch.object(AzureGitClient, "generate_repository_map")
+    def test_ensure_repository_map_uses_fresh_cache(self, mock_generate_repository_map) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "map.json"
+            fresh = {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "organization": "my-org",
+                "projects": {"project_1": []},
+            }
+            output.write_text(json.dumps(fresh), encoding="utf-8")
+
+            mapping = self.client.ensure_repository_map(
+                output_file=output,
+                force_refresh=False,
+                max_age_hours=24,
+            )
+
+        self.assertEqual(mapping["organization"], "my-org")
+        mock_generate_repository_map.assert_not_called()
+
+    @patch.object(AzureGitClient, "generate_repository_map")
+    def test_ensure_repository_map_refreshes_when_stale(self, mock_generate_repository_map) -> None:
+        stale = {
+            "generated_at": (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat(),
+            "organization": "my-org",
+            "projects": {"project_1": []},
+        }
+        refreshed = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "organization": "my-org",
+            "projects": {"project_1": [{"id": "new"}]},
+        }
+        mock_generate_repository_map.return_value = refreshed
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "map.json"
+            output.write_text(json.dumps(stale), encoding="utf-8")
+
+            mapping = self.client.ensure_repository_map(
+                output_file=output,
+                force_refresh=False,
+                max_age_hours=1,
+            )
+
+            persisted = output.read_text(encoding="utf-8")
+
+        self.assertEqual(mapping["projects"]["project_1"][0]["id"], "new")
+        self.assertIn('"id": "new"', persisted)
+        mock_generate_repository_map.assert_called_once()
 
 
 if __name__ == "__main__":

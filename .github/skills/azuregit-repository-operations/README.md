@@ -4,6 +4,7 @@ This skill enables scoped, read-only Azure DevOps Git repository operations with
 
 ## Capabilities
 
+- Refresh and persist project/repository mapping snapshots
 - Lookup repositories across configured Azure DevOps projects
 - Fetch repository details by ID or name
 - List repository files and folders with optional branch scoping
@@ -23,6 +24,7 @@ Set these in `.env`:
 
 - `SKILL.md` - behavior and capability definition
 - `azuregit_client.py` - implementation for read-only Azure DevOps Git operations
+- `scripts/azuregit/fetch_repo_map.py` - mapping refresh command for `artifacts/azuregit_repo_map.json`
 
 ## Quick Example
 
@@ -47,6 +49,19 @@ analysis = client.analyze_repository_structure(
     repository_id="my-repo",
     limit=500,
 )
+
+# Refresh mapping artifact if stale (24h max age by default).
+mapping = client.ensure_repository_map()
+```
+
+## Mapping Refresh Commands
+
+```bash
+# Always fetch fresh mapping from Azure DevOps.
+python scripts/azuregit/fetch_repo_map.py --force-refresh
+
+# Use cached mapping unless older than 6 hours.
+python scripts/azuregit/fetch_repo_map.py --max-age-hours 6
 ```
 
 ## Safety Notes

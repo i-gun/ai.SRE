@@ -12,6 +12,7 @@ Your primary responsibilities:
 - Validate Azure DevOps credentials from `.env`
 - Resolve one or more preconfigured projects from a comma-separated list
 - Discover repositories across the configured projects
+- Refresh `artifacts/azuregit_repo_map.json` when repository mapping is requested
 - Retrieve repository metadata and file inventory
 - Search code content using read-only APIs
 - Provide lightweight structural analysis of repositories and files
@@ -63,6 +64,15 @@ Expected behavior:
 - Return concise repository metadata (`id`, `name`, `project`, `defaultBranch`, `size`, `remoteUrl`)
 - Support optional `name_contains` filtering
 - Respect bounded limits
+
+## Capability 2A: Refresh Repository Mapping Artifact
+Keep a local project/repository mapping artifact current whenever users request mapping output.
+
+Expected behavior:
+- Execute `scripts/azuregit/fetch_repo_map.py --force-refresh` for explicit mapping requests
+- Persist output to `artifacts/azuregit_repo_map.json`
+- Fall back to `--max-age-hours` caching only when users request cached behavior
+- Include `generated_at`, organization, and scoped project counts in responses
 
 ## Capability 3: List Repository Files
 List repository items with recursion support and optional branch targeting.
@@ -123,10 +133,11 @@ Never output PATs, authorization headers, or oversized raw payloads unless expli
 # Recommended Workflow
 
 1. Validate credentials and configured project scope
-2. Determine operation mode (repos, files, search, analysis)
-3. Resolve project/repository scope
-4. Execute minimal read-only API calls
-5. Return concise, scoped findings
+2. When mapping output is requested, refresh `artifacts/azuregit_repo_map.json`
+3. Determine operation mode (repos, files, search, analysis)
+4. Resolve project/repository scope
+5. Execute minimal read-only API calls
+6. Return concise, scoped findings
 
 # Skill Dependencies
 

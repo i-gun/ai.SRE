@@ -205,6 +205,21 @@ Permanent scripts at: `scripts/servicenow/operation_name.py`
 
 ## Workflow Examples
 
+### Example 0: AzureGit Project/Repository Mapping Refresh
+
+**Problem:** Need latest Azure DevOps project/repository mapping for scoped analysis.
+
+**Correct Approach:**
+```bash
+python scripts/azuregit/fetch_repo_map.py --force-refresh
+```
+
+**Why:**
+- Uses AzureGit skill bootstrap and `.env` credentials
+- Writes normalized artifact to `artifacts/azuregit_repo_map.json`
+- Avoids stale mapping during repository discovery and reporting
+- Supports cache-based refresh via `--max-age-hours` when fresh fetch is not required
+
 ### Example 1: Batch Incident Resolution
 
 **Problem:** Resolve 182 "Triggered : " incidents with specific fields.

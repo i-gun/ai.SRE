@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 import requests
@@ -85,6 +88,7 @@ class AzureGitClient:
     DEFAULT_TIMEOUT_SECONDS = 30
     DEFAULT_LIMIT = 100
     MAX_LIMIT = 1000
+    DEFAULT_REPO_MAP_MAX_AGE_HOURS = 24.0
 
     def __init__(self, config: AzureGitConfig):
         self.config = config
@@ -95,6 +99,82 @@ class AzureGitClient:
     @classmethod
     def from_env(cls) -> "AzureGitClient":
         return cls(AzureGitConfig.from_env())
+
+    @staticmethod
+    def default_repo_map_path() -> Path:
+        project_root = Path(__file__).resolve().parents[3]
+        return project_root / "artifacts" / "azuregit_repo_map.json"
+
+    @staticmethod
+    def _parse_generated_at(raw_value: str) -> Optional[datetime]:
+        value = (raw_value or "").strip()
+        if not value:
+            return None
+        try:
+            generated = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if generated.tzinfo is None:
+            return generated.replace(tzinfo=timezone.utc)
+        return generated
+
+    @staticmethod
+    def _repo_map_is_stale(*, generated_at: Optional[datetime], max_age_hours: float) -> bool:
+        if generated_at is None:
+            return True
+        if max_age_hours <= 0:
+            return True
+        threshold = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        return generated_at < threshold
+
+    def generate_repository_map(self) -> Dict[str, Any]:
+        repositories_by_project = self.list_repositories()
+        projects: Dict[str, List[Dict[str, Any]]] = {}
+        for project_name, repositories in repositories_by_project.items():
+            projects[project_name] = [
+                {
+                    "id": repo.get("id"),
+                    "name": repo.get("name"),
+                    "defaultBranch": repo.get("defaultBranch"),
+                    "size": repo.get("size"),
+                    "remoteUrl": repo.get("remoteUrl"),
+                }
+                for repo in repositories
+            ]
+
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "organization": self.config.organization,
+            "projects": projects,
+        }
+
+    def ensure_repository_map(
+        self,
+        *,
+        output_file: Optional[Path] = None,
+        force_refresh: bool = False,
+        max_age_hours: float = DEFAULT_REPO_MAP_MAX_AGE_HOURS,
+    ) -> Dict[str, Any]:
+        map_path = output_file or self.default_repo_map_path()
+        map_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if not force_refresh and map_path.exists():
+            try:
+                existing = json.loads(map_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                existing = None
+
+            if isinstance(existing, dict):
+                generated_at = self._parse_generated_at(str(existing.get("generated_at", "")))
+                if not self._repo_map_is_stale(
+                    generated_at=generated_at,
+                    max_age_hours=max_age_hours,
+                ):
+                    return existing
+
+        mapping = self.generate_repository_map()
+        map_path.write_text(json.dumps(mapping, indent=2), encoding="utf-8")
+        return mapping
 
     def _url(self, project: str, path: str) -> str:
         return f"https://dev.azure.com/{self.config.organization}/{project}/_apis{path}"

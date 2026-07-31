@@ -34,6 +34,7 @@ Agents automatically handle credential loading, validation, and error handling.
 ### Development & Governance
 - **Integration Governance** — See [INTEGRATION_GOVERNANCE.md](docs/INTEGRATION_GOVERNANCE.md) for credential handling, script placement, and best practices
 - **Hook Setup** — See [GIT_HOOKS_IMPLEMENTATION.md](docs/GIT_HOOKS_IMPLEMENTATION.md) for automated documentation and formatting
+- **AzureGit Mapping Report** — See [AZUREGIT_REPOSITORY_MAPPING_REPORT.md](docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md) for the latest scoped project/repository summary
 - **ServiceNow Resolve Prompt Pack** — See [README-SN-RESOLVE.md](.github/prompts/README-SN-RESOLVE.md) for reusable Gigya, RTCDP, and SFSC incident resolution prompts
 
 ## Project Structure
@@ -100,6 +101,9 @@ Agents automatically handle credential loading, validation, and error handling.
 │       ├── analyze_trends.py
 │       ├── trace_dependencies.py
 │       └── root_cause_analysis.py
+│   └── azuregit/
+│       ├── common.py
+│       └── fetch_repo_map.py
 │   └── orchestration/
 │       └── newrelic_servicenow_alert_orchestrator.py
 │   └── servicenow/
