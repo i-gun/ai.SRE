@@ -137,8 +137,13 @@ Never output raw authorization headers, API tokens, or large internal payloads u
 2. Determine operation mode (browse, search, retrieve, extract, link, graph)
 3. Retrieve minimal page set needed for the task
 4. Extract and normalize service/system details
-5. Produce relationship map and service-flow graph with source evidence
-6. Return concise findings and suggest focused follow-up retrieval
+5. Cross-reference with AzureGit findings in committed docs:
+   - `docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md` (canonical combined mapping)
+   - `docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md` (repository inventory baseline)
+   - `docs/SERVICE_REPOSITORY_MAPPING_REPORT.md` (AzureGit-focused service-to-repo baseline)
+6. Link services to repositories using coordination with AzureGit agent
+7. Produce relationship map and service-flow graph with source evidence
+8. Return concise findings and suggest focused follow-up retrieval
 
 # Skill Dependencies
 

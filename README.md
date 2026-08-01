@@ -27,6 +27,7 @@ Always use agent delegation (`@AgentName`) rather than creating custom scripts:
 @ServiceNow, [operation description]
 @Jira, [operation description]
 @Confluence, [operation description]
+@AzureGit, [operation description]
 ```
 
 Agents automatically handle credential loading, validation, and error handling.
@@ -34,7 +35,11 @@ Agents automatically handle credential loading, validation, and error handling.
 ### Development & Governance
 - **Integration Governance** — See [INTEGRATION_GOVERNANCE.md](docs/INTEGRATION_GOVERNANCE.md) for credential handling, script placement, and best practices
 - **Hook Setup** — See [GIT_HOOKS_IMPLEMENTATION.md](docs/GIT_HOOKS_IMPLEMENTATION.md) for automated documentation and formatting
-- **AzureGit Mapping Report** — See [AZUREGIT_REPOSITORY_MAPPING_REPORT.md](docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md) for the latest scoped project/repository summary
+- **Repository Mapping (Primary)** — [COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md](docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md) is the canonical combined view (AzureGit + Confluence + Jira label signal run).
+- **Repository Mapping (Supporting)**
+  - [AZUREGIT_REPOSITORY_MAPPING_REPORT.md](docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md) — Project/repository inventory snapshot (278 repos across 15 projects)
+  - [SERVICE_REPOSITORY_MAPPING_REPORT.md](docs/SERVICE_REPOSITORY_MAPPING_REPORT.md) — AzureGit-focused service-to-repository baseline analysis
+- **Knowledge Mapping** — Run `@Confluence` agent to regenerate service documentation analysis. Current summary: 3.9% coverage, 124 services with documentation gaps. Cross-check with [COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md](docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md).
 - **ServiceNow Resolve Prompt Pack** — See [README-SN-RESOLVE.md](.github/prompts/README-SN-RESOLVE.md) for reusable Gigya, RTCDP, and SFSC incident resolution prompts
 
 ## Project Structure
@@ -110,7 +115,11 @@ Agents automatically handle credential loading, validation, and error handling.
 │       ├── common.py
 │       ├── batch_resolve_triggered_incidents.py
 │       ├── create_issue_from_problem.py
-├── artifacts/               # Temporary and archived diagnostics
+├── data/                    # Committed input data (service catalogs, reference lists)
+│   ├── newrelic_apm_service_names_1679802.txt
+│   ├── newrelic_apm_service_names_1679802.csv
+│   └── newrelic_apm_services_1679802.json
+├── artifacts/               # Gitignored: local-only temp scripts and generated outputs
 │   └── servicenow/
 │       └── archive/
 │           ├── diagnose_issue_table.py

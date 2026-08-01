@@ -13,7 +13,7 @@ NEWRELIC_ACCOUNT_IDS=1234567,2345678
 
 - Alert lookup is restricted to account `1679802`.
 - Policy lookup uses starts-with and defaults to `Digital Operations%`.
-- Query builder supports keyset-compatible alert fields from `artifacts/nrql_NrAiIncident_keyset.txt` when required.
+- Query builder uses standard `NrAiIncident` NRQL keyset fields.
 - Muted alerts are always excluded.
 - Default time range is `SINCE 3 hours ago UNTIL now`.
 - `since` is configurable from prompt/method call.

@@ -24,7 +24,7 @@ Set these in `.env`:
 
 - `SKILL.md` - behavior and capability definition
 - `azuregit_client.py` - implementation for read-only Azure DevOps Git operations
-- `scripts/azuregit/fetch_repo_map.py` - mapping refresh command for `artifacts/azuregit_repo_map.json`
+- `scripts/azuregit/fetch_repo_map.py` - mapping refresh command; writes local-only snapshot to `artifacts/azuregit_repo_map.json`
 
 ## Quick Example
 

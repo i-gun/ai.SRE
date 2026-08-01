@@ -276,7 +276,43 @@ artifacts/servicenow/archive/test_connection.py
 - Review archived scripts during adjacent cleanup work and remove entries that are no longer referenced by docs, tickets, or active runbooks.
 - Do not promote archived scripts back into `scripts/` without parameterization, documentation, and explicit execution gates.
 
-### Example 3: Creating Reusable Operational Script
+### Example 3: Coordinated Service Discovery Across AzureGit & Confluence
+
+**Problem:** Analyze NewRelic APM services to understand repository mapping and documentation coverage.
+
+**✅ Correct Approach:**
+```bash
+# Run both agents in parallel; input data sourced from data/ (committed)
+@Confluence, analyze services in data/newrelic_apm_service_names_1679802.txt
+@AzureGit, map services in data/newrelic_apm_service_names_1679802.txt to repositories
+
+# Committed team-visible reports (the authoritative outputs):
+# - docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md (canonical combined mapping)
+# - docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md (project/repo inventory baseline)
+# - docs/SERVICE_REPOSITORY_MAPPING_REPORT.md (AzureGit-focused service-to-repo baseline)
+```
+
+**Why:**
+- `data/` is committed and consistent across all environments
+- `docs/` reports are the durable, shareable output — not local JSON files
+- Local `artifacts/` JSONs are generated on-demand; never relied upon as static data sources
+
+**Output Structure:**
+```
+data/                                          # Committed input data
+  └── newrelic_apm_service_names_1679802.txt  # Source-of-truth APM service list
+
+docs/                                          # Committed authoritative reports
+  ├── COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md
+  ├── AZUREGIT_REPOSITORY_MAPPING_REPORT.md
+  └── SERVICE_REPOSITORY_MAPPING_REPORT.md
+
+artifacts/  [gitignored]                       # Local-only generated outputs
+  ├── azuregit_repo_map.json                  # Regenerate: fetch_repo_map.py
+  └── azuregit_service_repository_map.json    # Regenerate: map_services_to_repositories.py
+```
+
+### Example 4: Creating Reusable Operational Script
 
 **Problem:** Need permanent script to search ServiceNow incidents with custom filter.
 
@@ -302,6 +338,7 @@ from servicenow_client import ServiceNowClient
 - Organized per service (servicenow/)
 - Uses bootstrap pattern to load `.env` credentials securely
 - Reusable and versioned
+
 
 ## Validation Checklist
 

@@ -1,6 +1,6 @@
 # AzureGit Repository Mapping Report
 
-Generated from: `artifacts/azuregit_repo_map.json`
+> **Snapshot** — Run `python scripts/azuregit/fetch_repo_map.py --force-refresh` to regenerate locally.
 
 ## Snapshot Metadata
 

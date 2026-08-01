@@ -28,7 +28,11 @@ Refresh and persist a project/repository mapping snapshot when mapping data is r
 
 Behavior:
 - Uses `scripts/azuregit/fetch_repo_map.py`
-- Writes to `artifacts/azuregit_repo_map.json`
+- Writes local-only snapshot to `artifacts/azuregit_repo_map.json` (gitignored; regenerate per environment)
+- Committed team-visible reports live in `docs/`:
+  - `docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md` — Canonical combined mapping snapshot
+  - `docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md` — Repository inventory snapshot
+  - `docs/SERVICE_REPOSITORY_MAPPING_REPORT.md` — AzureGit-focused service-to-repository baseline analysis
 - Supports forced refresh (`--force-refresh`) for latest mapping
 - Supports cache freshness threshold (`--max-age-hours`)
 - Returns mapping metadata (`generated_at`, `organization`, project and repository counts)

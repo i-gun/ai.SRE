@@ -65,12 +65,16 @@ Expected behavior:
 - Support optional `name_contains` filtering
 - Respect bounded limits
 
-## Capability 2A: Refresh Repository Mapping Artifact
-Keep a local project/repository mapping artifact current whenever users request mapping output.
+## Capability 2A: Refresh Repository Mapping Artifacts
+Keep the local repository map current whenever mapping data is requested.
 
 Expected behavior:
 - Execute `scripts/azuregit/fetch_repo_map.py --force-refresh` for explicit mapping requests
-- Persist output to `artifacts/azuregit_repo_map.json`
+- Persist local-only snapshot to `artifacts/azuregit_repo_map.json` (gitignored; regenerate as needed)
+- Reference committed reports in `docs/` as the team-visible source of truth:
+  - `docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md` — Canonical combined mapping snapshot
+  - `docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md` — Repository inventory snapshot
+  - `docs/SERVICE_REPOSITORY_MAPPING_REPORT.md` — AzureGit-focused service-to-repository baseline analysis
 - Fall back to `--max-age-hours` caching only when users request cached behavior
 - Include `generated_at`, organization, and scoped project counts in responses
 
@@ -133,11 +137,15 @@ Never output PATs, authorization headers, or oversized raw payloads unless expli
 # Recommended Workflow
 
 1. Validate credentials and configured project scope
-2. When mapping output is requested, refresh `artifacts/azuregit_repo_map.json`
+2. When mapping output is requested:
+   - Refresh local `artifacts/azuregit_repo_map.json` (gitignored; not shared across environments)
+  - Reference `docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md` (canonical combined mapping)
+  - Reference `docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md` (committed inventory baseline)
+  - Reference `docs/SERVICE_REPOSITORY_MAPPING_REPORT.md` (committed AzureGit-focused baseline)
 3. Determine operation mode (repos, files, search, analysis)
 4. Resolve project/repository scope
 5. Execute minimal read-only API calls
-6. Return concise, scoped findings
+6. Return concise, scoped findings with cross-reference to committed docs/
 
 # Skill Dependencies
 
