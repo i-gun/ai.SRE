@@ -163,3 +163,4 @@ config.local.json
 # GENERATED ARTIFACTS (runtime outputs, reports, PDFs)
 # ============================================================================
 artifacts/
+data/
