@@ -78,6 +78,14 @@ Expected behavior:
 - Fall back to `--max-age-hours` caching only when users request cached behavior
 - Include `generated_at`, organization, and scoped project counts in responses
 
+## Capability 2B: Validate Service Catalog Input Availability
+Require local `data/` service catalog inputs before service-to-repository mapping tasks.
+
+Expected behavior:
+- Check for `data/newrelic_apm_service_names_1679802.txt` before mapping workflows
+- If missing, stop mapping guidance and instruct `@NewRelic` to regenerate local input data first
+- Resume mapping only after required local data files exist
+
 ## Capability 3: List Repository Files
 List repository items with recursion support and optional branch targeting.
 
@@ -137,15 +145,18 @@ Never output PATs, authorization headers, or oversized raw payloads unless expli
 # Recommended Workflow
 
 1. Validate credentials and configured project scope
-2. When mapping output is requested:
+2. Validate required local input data for mapping:
+  - Require `data/newrelic_apm_service_names_1679802.txt`
+  - If absent, delegate generation to `@NewRelic` before continuing
+3. When mapping output is requested:
    - Refresh local `artifacts/azuregit_repo_map.json` (gitignored; not shared across environments)
   - Reference `docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md` (canonical combined mapping)
   - Reference `docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md` (committed inventory baseline)
   - Reference `docs/SERVICE_REPOSITORY_MAPPING_REPORT.md` (committed AzureGit-focused baseline)
-3. Determine operation mode (repos, files, search, analysis)
-4. Resolve project/repository scope
-5. Execute minimal read-only API calls
-6. Return concise, scoped findings with cross-reference to committed docs/
+4. Determine operation mode (repos, files, search, analysis)
+5. Resolve project/repository scope
+6. Execute minimal read-only API calls
+7. Return concise, scoped findings with cross-reference to committed docs/
 
 # Skill Dependencies
 

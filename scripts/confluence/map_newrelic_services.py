@@ -34,11 +34,26 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def build_missing_service_list_message(service_list_path: Path) -> str:
+    """Build actionable guidance when the local service list is missing."""
+    return (
+        f"Service list file not found: {service_list_path}\n"
+        "The data/ folder is intentionally excluded from repository sync.\n"
+        "Generate local service data before this step:\n"
+        "  1) @NewRelic, export current APM service names for account 1679802\n"
+        "  2) Save outputs under data/ as:\n"
+        "     - newrelic_apm_service_names_1679802.txt\n"
+        "     - newrelic_apm_service_names_1679802.csv\n"
+        "     - newrelic_apm_services_1679802.json\n"
+        "  3) Re-run scripts/confluence/map_newrelic_services.py"
+    )
+
+
 def load_services(service_list_path: str) -> List[str]:
     """Load service names from file."""
     path = Path(service_list_path)
     if not path.exists():
-        raise FileNotFoundError(f"Service list file not found: {service_list_path}")
+        raise FileNotFoundError(build_missing_service_list_message(path))
     with open(path, encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip()]
 

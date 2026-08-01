@@ -83,6 +83,17 @@ Behavior:
 - Scope to all configured accounts by default; accepts optional `account_ids` override
 - Returns per-account result lists ordered by `lastModifiedTime DESC`
 
+### 7. Generate Local Service Catalog
+Generate local `data/` service catalog files required by repository/documentation mapping workflows.
+
+Behavior:
+- Preferred path is `@NewRelic` delegation
+- Non-chat automation fallback is `python scripts/newrelic/generate_service_catalog.py`
+- Produces:
+	- `data/newrelic_apm_service_names_1679802.txt`
+	- `data/newrelic_apm_service_names_1679802.csv`
+	- `data/newrelic_apm_services_1679802.json`
+
 ## API Endpoints Used
 
 - `POST https://api.newrelic.com/graphql` — NerdGraph for all NRQL and metadata queries

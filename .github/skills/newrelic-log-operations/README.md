@@ -17,6 +17,7 @@ This skill package provides New Relic NerdGraph/NRQL log search, trend analysis,
 The repository includes execution helpers under `scripts/newrelic/`:
 
 - `common.py` — shared bootstrap (`.env` loading + skill import path setup)
+- `generate_service_catalog.py` — generate local `data/` service catalog files for mapping workflows
 - `search_logs.py` — search Log events across configured accounts
 - `analyze_trends.py` — generate time-series log count trends
 - `trace_dependencies.py` — discover upstream/downstream service dependencies
@@ -25,11 +26,14 @@ The repository includes execution helpers under `scripts/newrelic/`:
 Example CLI usage:
 
 ```bash
+python scripts/newrelic/generate_service_catalog.py --account-id 1679802 --since "30 days ago" --pretty-json
 python scripts/newrelic/search_logs.py --message "timeout" --severity ERROR --since "2 hours ago"
 python scripts/newrelic/analyze_trends.py --service payment-service --since "24 hours ago" --facet level
 python scripts/newrelic/trace_dependencies.py --service checkout-service --since "1 hour ago"
 python scripts/newrelic/root_cause_analysis.py --service order-service --since "30 minutes ago"
 ```
+
+`@NewRelic` delegation remains the preferred path for interactive and governed workflows; this helper exists for non-chat automation.
 
 ## Supported Workflows
 

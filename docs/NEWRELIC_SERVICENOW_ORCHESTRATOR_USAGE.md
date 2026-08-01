@@ -51,6 +51,8 @@ For each open unacknowledged New Relic alert in scoped account `1679802`:
 python scripts\orchestration\newrelic_servicenow_alert_orchestrator.py
 ```
 
+Local data bootstrap (single command, non-chat automation fallback): `python scripts/newrelic/generate_service_catalog.py --account-id 1679802 --since "30 days ago" --pretty-json`
+
 Default output is Markdown/plain text on screen in read-only mode.
 
 ## Run with explicit overrides

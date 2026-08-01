@@ -10,8 +10,26 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 
+def build_missing_service_list_message(services_file: Path) -> str:
+    """Build actionable guidance when the local service list is missing."""
+    return (
+        f"Required service list is missing: {services_file}\n"
+        "The data/ folder is intentionally excluded from repository sync.\n"
+        "Generate the local service catalog before running this script:\n"
+        "  1) @NewRelic, export current APM service names for account 1679802\n"
+        "  2) Save outputs under data/ as:\n"
+        "     - newrelic_apm_service_names_1679802.txt\n"
+        "     - newrelic_apm_service_names_1679802.csv\n"
+        "     - newrelic_apm_services_1679802.json\n"
+        "  3) Re-run scripts/azuregit/map_services_to_repositories.py"
+    )
+
+
 def load_services(services_file: Path) -> List[str]:
     """Load service names from text file."""
+    if not services_file.exists():
+        raise FileNotFoundError(build_missing_service_list_message(services_file))
+
     services = []
     with open(services_file, "r") as f:
         for line in f:

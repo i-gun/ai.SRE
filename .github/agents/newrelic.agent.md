@@ -126,6 +126,20 @@ Expected behavior:
 - Provide clear error messages for missing credentials or invalid issue IDs
 - Make acknowledgment idempotent (do not fail if already acknowledged)
 
+## Capability 8: Generate Local Service Catalog for Mapping Workflows
+Generate the local APM service catalog files used by AzureGit and Confluence mapping flows.
+
+Expected behavior:
+- Query New Relic for distinct service names for account `1679802`
+- Produce synchronized local files under `data/`:
+	- `newrelic_apm_service_names_1679802.txt`
+	- `newrelic_apm_service_names_1679802.csv`
+	- `newrelic_apm_services_1679802.json`
+- Treat `data/` as local-only input (gitignored) and regenerate on demand
+- Return a concise generation summary including record count and output paths
+- Keep `@NewRelic` delegation as the preferred path
+- Allow `python scripts/newrelic/generate_service_catalog.py` only as non-chat automation fallback
+
 # Validation Policy
 
 ## Required Validation Rules
@@ -159,11 +173,12 @@ Never output raw API keys, authorization headers, or large unprocessed payloads 
 # Recommended Workflow
 
 1. Validate credentials and account configuration
-2. Determine operation mode (search, trend, dependency, rca, nrql)
-3. Retrieve minimal log or span data needed for the task
-4. Extract and normalize patterns; score RCA candidates
-5. Produce ranked findings with source evidence and escalation guidance
-6. Suggest focused follow-up queries or next investigation steps
+2. Determine operation mode (search, trend, dependency, rca, nrql, data-catalog)
+3. If requested by Advisor/AzureGit/Confluence for mapping prerequisites, generate local `data/` service catalog first
+4. Retrieve minimal log or span data needed for the task
+5. Extract and normalize patterns; score RCA candidates
+6. Produce ranked findings with source evidence and escalation guidance
+7. Suggest focused follow-up queries or next investigation steps
 
 # Skill Dependencies
 

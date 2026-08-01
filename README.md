@@ -32,6 +32,23 @@ Always use agent delegation (`@AgentName`) rather than creating custom scripts:
 
 Agents automatically handle credential loading, validation, and error handling.
 
+### Data Bootstrap (Required After Clone)
+The `data/` folder is intentionally gitignored for security and does not synchronize across environments.
+
+Before running repository-mapping workflows, generate local data with available agents:
+
+1. Preferred path: `@NewRelic, export current APM service names for account 1679802 and save locally to data/newrelic_apm_service_names_1679802.txt, data/newrelic_apm_service_names_1679802.csv, and data/newrelic_apm_services_1679802.json`
+2. Non-chat automation fallback:
+
+```bash
+python scripts/newrelic/generate_service_catalog.py --account-id 1679802 --since "30 days ago" --pretty-json
+```
+
+This generates the same three files under `data/`.
+
+3. Run: `@Confluence, analyze services in data/newrelic_apm_service_names_1679802.txt`
+4. Run: `@AzureGit, map services in data/newrelic_apm_service_names_1679802.txt to repositories`
+
 ### Development & Governance
 - **Integration Governance** — See [INTEGRATION_GOVERNANCE.md](docs/INTEGRATION_GOVERNANCE.md) for credential handling, script placement, and best practices
 - **Hook Setup** — See [GIT_HOOKS_IMPLEMENTATION.md](docs/GIT_HOOKS_IMPLEMENTATION.md) for automated documentation and formatting
@@ -105,7 +122,8 @@ Agents automatically handle credential loading, validation, and error handling.
 │       ├── search_logs.py
 │       ├── analyze_trends.py
 │       ├── trace_dependencies.py
-│       └── root_cause_analysis.py
+│       ├── root_cause_analysis.py
+│       └── generate_service_catalog.py
 │   └── azuregit/
 │       ├── common.py
 │       └── fetch_repo_map.py
@@ -115,7 +133,7 @@ Agents automatically handle credential loading, validation, and error handling.
 │       ├── common.py
 │       ├── batch_resolve_triggered_incidents.py
 │       ├── create_issue_from_problem.py
-├── data/                    # Committed input data (service catalogs, reference lists)
+├── data/                    # Local generated input data (gitignored, not synchronized)
 │   ├── newrelic_apm_service_names_1679802.txt
 │   ├── newrelic_apm_service_names_1679802.csv
 │   └── newrelic_apm_services_1679802.json
@@ -130,6 +148,7 @@ Agents automatically handle credential loading, validation, and error handling.
 │           └── test_query_variations.py
 ├── tests/
 │   ├── test_confluence_client.py
+│   ├── test_newrelic_scripts.py
 │   ├── test_newrelic_servicenow_alert_orchestrator.py
 │   ├── test_servicenow_client.py
 │   └── test_servicenow_scripts.py

@@ -130,20 +130,24 @@ Never output raw authorization headers, API tokens, or large internal payloads u
 3. Do not infer authoritative architecture from a single page when evidence is weak
 4. Surface confidence and ambiguity when linking services
 5. Require explicit user intent before any future write operations
+6. For service-mapping workflows, verify local `data/newrelic_apm_service_names_1679802.txt` exists before analysis
+7. If local data is missing, require `@NewRelic` data generation first and then continue
 
 # Recommended Workflow
 
 1. Validate credentials, host configuration, and space key
-2. Determine operation mode (browse, search, retrieve, extract, link, graph)
-3. Retrieve minimal page set needed for the task
-4. Extract and normalize service/system details
-5. Cross-reference with AzureGit findings in committed docs:
+2. If workflow depends on New Relic service catalog, validate local `data/newrelic_apm_service_names_1679802.txt`
+3. If missing, delegate to `@NewRelic` to generate the local dataset before proceeding
+4. Determine operation mode (browse, search, retrieve, extract, link, graph)
+5. Retrieve minimal page set needed for the task
+6. Extract and normalize service/system details
+7. Cross-reference with AzureGit findings in committed docs:
    - `docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md` (canonical combined mapping)
    - `docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md` (repository inventory baseline)
    - `docs/SERVICE_REPOSITORY_MAPPING_REPORT.md` (AzureGit-focused service-to-repo baseline)
-6. Link services to repositories using coordination with AzureGit agent
-7. Produce relationship map and service-flow graph with source evidence
-8. Return concise findings and suggest focused follow-up retrieval
+8. Link services to repositories using coordination with AzureGit agent
+9. Produce relationship map and service-flow graph with source evidence
+10. Return concise findings and suggest focused follow-up retrieval
 
 # Skill Dependencies
 

@@ -281,25 +281,25 @@ artifacts/servicenow/archive/test_connection.py
 **Problem:** Analyze NewRelic APM services to understand repository mapping and documentation coverage.
 
 **✅ Correct Approach:**
-```bash
-# Run both agents in parallel; input data sourced from data/ (committed)
-@Confluence, analyze services in data/newrelic_apm_service_names_1679802.txt
-@AzureGit, map services in data/newrelic_apm_service_names_1679802.txt to repositories
-
-# Committed team-visible reports (the authoritative outputs):
-# - docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md (canonical combined mapping)
-# - docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md (project/repo inventory baseline)
-# - docs/SERVICE_REPOSITORY_MAPPING_REPORT.md (AzureGit-focused service-to-repo baseline)
-```
+1. Preferred path: run `@NewRelic, export current APM service names for account 1679802 and save locally to data/newrelic_apm_service_names_1679802.txt, data/newrelic_apm_service_names_1679802.csv, and data/newrelic_apm_services_1679802.json`
+2. Non-chat automation fallback: run `python scripts/newrelic/generate_service_catalog.py --account-id 1679802 --since "30 days ago" --pretty-json`
+3. Run in parallel:
+  - `@Confluence, analyze services in data/newrelic_apm_service_names_1679802.txt`
+  - `@AzureGit, map services in data/newrelic_apm_service_names_1679802.txt to repositories`
+4. Commit only team-visible reports as authoritative outputs:
+  - `docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md` (canonical combined mapping)
+  - `docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md` (project/repo inventory baseline)
+  - `docs/SERVICE_REPOSITORY_MAPPING_REPORT.md` (AzureGit-focused service-to-repo baseline)
 
 **Why:**
-- `data/` is committed and consistent across all environments
+- `data/` is local and gitignored for security; each environment generates its own copy
+- `@NewRelic` remains the primary and governed path; the script is only for non-chat automation
 - `docs/` reports are the durable, shareable output — not local JSON files
 - Local `artifacts/` JSONs are generated on-demand; never relied upon as static data sources
 
 **Output Structure:**
 ```
-data/                                          # Committed input data
+data/                                          # Local generated input data (gitignored)
   └── newrelic_apm_service_names_1679802.txt  # Source-of-truth APM service list
 
 docs/                                          # Committed authoritative reports

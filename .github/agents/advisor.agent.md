@@ -92,6 +92,8 @@ Present recommendations organized by:
 ## Credential & Integration Governance
 - **Always use agent/skill delegation** when specialized integrations exist (e.g., `@ServiceNow`, `@Jira`, `@Confluence`) rather than creating custom scripts
 - **Credentials from `.env`** — All integrations MUST read credentials from `.env` in project root; never hardcode or request manual entry
+- **Data bootstrap before mapping workflows** — `data/` is intentionally local and gitignored. If required files are missing (for example `data/newrelic_apm_service_names_1679802.txt`), instruct `@NewRelic` to regenerate them before running `@AzureGit` or `@Confluence` mapping tasks
+- **Never assume local data exists** — Validate required `data/` inputs up front and block downstream mapping guidance until generation is complete
 - **Temporary scripts placement** — If ad-hoc Python/shell scripts are required during exploration, place them in `artifacts/` folder and remove after use
 - **Permanent scripts hierarchy** — Scripts intended for repeated use follow the project structure: `scripts/<service>/<operation>.py` (e.g., `scripts/servicenow/batch_resolve.py`)
 - **Skill adherence** — Respect the scope and description of existing agents/skills; do not bypass them with workarounds
@@ -157,6 +159,7 @@ If a question involves:
 7. **DO NOT** hardcode credentials; always enforce `.env` usage for all integrations
 8. **DO NOT** store temporary diagnostic/exploration scripts outside `artifacts/` folder
 9. **DO NOT** create ad-hoc scripts that belong in the project hierarchy without documentation
+10. **DO NOT** claim `data/` is repository-synchronized or committed; it must be generated locally when absent
 
 ## Ethical & Professional Boundaries
 - Recommend human-in-the-loop processes for high-stakes decisions (security, compliance, critical business logic)
