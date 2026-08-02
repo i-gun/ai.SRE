@@ -28,6 +28,8 @@ Always use agent delegation (`@AgentName`) rather than creating custom scripts:
 @Jira, [operation description]
 @Confluence, [operation description]
 @AzureGit, [operation description]
+@NewRelic, [operation description]
+@RCA, [incident identifier or description]
 ```
 
 Agents automatically handle credential loading, validation, and error handling.
@@ -69,7 +71,19 @@ This generates the same three files under `data/`.
 │   │   ├── confluence.agent.md
 │   │   ├── gitter.agent.md
 │   │   ├── jira.agent.md
+│   │   ├── newrelic.agent.md
+│   │   ├── rca.agent.md
 │   │   └── servicenow.agent.md
+│   ├── prompts/             # Reusable prompt templates
+│   │   ├── rca-intake.prompt.md
+│   │   ├── rca-deep-investigation.prompt.md
+│   │   ├── rca-hypothesis-stress-test.prompt.md
+│   │   ├── rca-similar-incident-comparison.prompt.md
+│   │   ├── rca-azuregit-code-attribution.prompt.md
+│   │   ├── rca-final-report-assembly.prompt.md
+│   │   ├── rca-executive-summary.prompt.md
+│   │   ├── README-SN-RESOLVE.md
+│   │   └── README-SN-PRB-Jira.md
 │   └── skills/              # Domain-specific skill implementations
 │       └── gitter-credentials/
 │           ├── SKILL.md
@@ -106,6 +120,31 @@ This generates the same three files under `data/`.
 │           ├── SKILL.md
 │           ├── README.md
 │           └── azuregit_client.py
+│       └── newrelic-authentication/
+│           └── SKILL.md
+│       └── newrelic-alert-operations/
+│           └── SKILL.md
+│       └── newrelic-log-operations/
+│           ├── SKILL.md
+│           └── README.md
+│       └── rca-log-forensics/
+│           └── SKILL.md
+│       └── rca-incident-similarity/
+│           └── SKILL.md
+│       └── rca-servicenow-mining/
+│           └── SKILL.md
+│       └── rca-jira-lifecycle/
+│           └── SKILL.md
+│       └── rca-confluence-context/
+│           └── SKILL.md
+│       └── rca-azuregit-attribution/
+│           └── SKILL.md
+│       └── rca-cross-system-correlation/
+│           └── SKILL.md
+│       └── rca-visualization/
+│           └── SKILL.md
+│       └── rca-report-authoring/
+│           └── SKILL.md
 ├── docs/                    # Project and implementation documentation
 │   ├── GIT_HOOKS_IMPLEMENTATION.md
 │   ├── GITTER_CREDENTIALS_SKILL_SUMMARY.md
@@ -179,6 +218,12 @@ Confluence knowledge operations agent for scoped page browsing, CQL search, cont
 ### AzureGit Agent
 Azure DevOps Git read-only operations agent for scoped multi-project repository lookup, code search, and lightweight codebase analysis using `.env` credentials.
 
+### NewRelic Agent
+New Relic observability agent for log search, trend analysis, dependency traversal, automated root cause analysis, and alert acknowledgment across configured accounts using `.env` credentials. Primary account: CTC Production `1679802`.
+
+### RCA Agent
+Elite RCA Orchestrator for end-to-end, evidence-driven root cause analysis. Correlates New Relic observability, ServiceNow incidents, Jira work tracking, Confluence knowledge, and AzureGit source attribution into a defensible RCA package. Requires explicit `APPROVE_RUN_RCA` command to begin execution. Use the [rca-intake prompt](.github/prompts/rca-intake.prompt.md) to initiate an investigation.
+
 ## Skills
 
 ### Gitter Credentials Skill
@@ -207,6 +252,42 @@ Credential validation and normalization for Azure DevOps organization, scoped pr
 
 ### AzureGit Repository Operations Skill
 Read-only Azure DevOps Git operations for repository discovery, file listing, content search, and lightweight repository structure analysis across scoped projects.
+
+### NewRelic Authentication Skill
+Credential validation and normalization for New Relic API key and comma-separated account ID list loaded from `.env`.
+
+### NewRelic Alert Operations Skill
+Fetch open unacknowledged New Relic issues scoped to account `1679802` and policies matching Digital Operations prefix, then acknowledge them with platform-resolved username.
+
+### NewRelic Log Operations Skill
+New Relic log search, trend analysis, pod restart checking, JWT/auth anomaly detection, dependency traversal, and automated RCA scoring across configured accounts.
+
+### RCA Log Forensics Skill
+Multi-account New Relic log forensics for deep error collection, burst detection, novelty scoring, pod restart analysis, JWT/auth anomaly detection, and pre/post-incident trend comparison.
+
+### RCA Incident Similarity Skill
+Discovers and differentially compares historical ServiceNow incidents against a target incident using signal matching, symptom overlap, resolution pattern mining, and recurrence scoring.
+
+### RCA ServiceNow Mining Skill
+Extracts structured timeline, assignee history, work notes, resolution notes, and linked problem/task records from a target ServiceNow incident.
+
+### RCA Jira Lifecycle Skill
+Jira lifecycle interpretation for discovering related issues, transition history, comment analysis, component and label ownership, fix-version linking, and dependency chain mapping.
+
+### RCA Confluence Context Skill
+Retrieves architecture documentation, service ownership pages, runbooks, known-error records, and prior RCA guidance from Confluence relevant to a target incident or service.
+
+### RCA AzureGit Attribution Skill
+Scoped repository discovery, service-name-driven code search, call-path tracing, fault location hypothesis generation, and confidence-scored attribution for RCA source analysis.
+
+### RCA Cross-System Correlation Skill
+Builds a unified causal timeline, scores competing hypotheses, rejects weak candidates, and produces a root cause determination with contributing factors from all evidence streams.
+
+### RCA Visualization Skill
+Produces structured chart data, error volume trend tables, latency overlays, incident timeline Mermaid diagrams, and causal relationship graphs from correlated evidence streams.
+
+### RCA Report Authoring Skill
+Assembles the complete, structured RCA markdown document from all stream outputs, including executive summary, technical timeline, evidence matrix, code attribution pack, corrective actions, and validation plan.
 
 ### Confluence Scripts & Tests
 - Helper scripts in `scripts/confluence/` support page browsing, CQL search, and service-flow graph generation.

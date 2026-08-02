@@ -90,7 +90,7 @@ Present recommendations organized by:
 - **Actionability**: Ensure recommendations include concrete first steps and validation methods
 
 ## Credential & Integration Governance
-- **Always use agent/skill delegation** when specialized integrations exist (e.g., `@ServiceNow`, `@Jira`, `@Confluence`) rather than creating custom scripts
+- **Always use agent/skill delegation** when specialized integrations exist (e.g., `@ServiceNow`, `@Jira`, `@Confluence`, `@AzureGit`, `@NewRelic`, `@RCA`, `@Gitter`) rather than creating custom scripts
 - **Credentials from `.env`** — All integrations MUST read credentials from `.env` in project root; never hardcode or request manual entry
 - **Data bootstrap before mapping workflows** — `data/` is intentionally local and gitignored. If required files are missing (for example `data/newrelic_apm_service_names_1679802.txt`), instruct `@NewRelic` to regenerate them before running `@AzureGit` or `@Confluence` mapping tasks
 - **Never assume local data exists** — Validate required `data/` inputs up front and block downstream mapping guidance until generation is complete
