@@ -77,6 +77,10 @@ Optional fields:
 Validation:
 - Missing required fields must be requested from the user before create
 
+**Idempotency rule (mandatory):** Always use `idempotent_create_issue()` instead of `create_issue()` in automated or retry-capable flows. `idempotent_create_issue()` performs a pre-flight JQL search for a recently created issue with the same project, type, and summary before issuing the create POST. If a matching issue is found it is reused; if creation fails (e.g. network timeout) a brief pause is inserted and a recovery search is performed before raising — returning the partially-created ticket rather than creating a second one.
+
+**Prohibition:** Never create throwaway probe issues to introspect field metadata. Use `get_create_meta()` instead; it fetches `allowedValues` and schema via `/rest/api/3/issue/createmeta` without writing any data.
+
 ### 6. Update Issue
 Update an existing issue with minimal field changes.
 
@@ -112,6 +116,7 @@ Behavior:
 - `GET /rest/api/3/dashboard/search`
 - `POST /rest/api/3/search`
 - `GET /rest/api/3/issue/{issueIdOrKey}`
+- `GET /rest/api/3/issue/createmeta` (field metadata — replaces probe pattern)
 - `POST /rest/api/3/issue`
 - `PUT /rest/api/3/issue/{issueIdOrKey}`
 - `POST /rest/api/3/issue/{issueIdOrKey}/comment`

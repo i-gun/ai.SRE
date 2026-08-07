@@ -100,8 +100,25 @@ Optional fields:
 
 Expected behavior:
 1. Ask targeted follow-up questions only for missing required fields
-2. Create issue with minimal valid payload
-3. Return confirmation summary (`key`, `id`, `summary`, `status` when available)
+2. **Always call `idempotent_create_issue()`** — never call `create_issue()` directly in automated or retry-capable contexts
+3. `idempotent_create_issue()` returns `(issue_payload, action)` where `action` ∈ `{"created", "recovered_existing", "recovered_partial"}`
+4. On `"recovered_existing"` or `"recovered_partial"`: update the returned issue with any missing fields rather than creating a new one
+5. Return confirmation summary (`key`, `id`, `summary`, `status`, `creation_action`)
+
+## Issue Creation Idempotency (mandatory policy)
+
+**Problem this solves:** Retry-capable automation (handoff scripts, orchestrators) previously created duplicate probe or partial tickets when creation failed or was repeated.
+
+**Rules enforced by this agent:**
+
+| Rule | Detail |
+|---|---|
+| Pre-flight check | Before every create, search for an existing issue matching `(project, issuetype, summary)` within the last 30 minutes |
+| Reuse on match | If a matching issue is found, return it with `action = "recovered_existing"` — do not create a second ticket |
+| Failure recovery | If the create POST fails, pause `CREATION_RECOVERY_PAUSE_SECONDS` seconds, then re-search within a 5-minute window before raising |
+| Partial-ticket path | If a partial ticket is found post-failure (`action = "recovered_partial"`), patch it with missing fields; never create a replacement |
+| No probe issues | **Never** create throwaway issues to inspect field metadata; use `get_create_meta()` which calls `/rest/api/3/issue/createmeta` |
+| No sentinel summaries | Summaries like `STRICT-META-PROBE-DO-NOT-USE` or `meta-probe` labels must never appear in production scripts |
 
 ## Capability 6: Update Issue
 Apply minimal field updates to an existing Jira issue.
@@ -177,3 +194,4 @@ Use these skills when handling Jira requests:
 Primary implementation files:
 - `.github/skills/jira-authentication/jira_env.py`
 - `.github/skills/jira-issue-operations/jira_client.py`
+- `scripts/jira/create_issue_from_servicenow_handoff.py` (INC→PRB→Jira strict handoff)

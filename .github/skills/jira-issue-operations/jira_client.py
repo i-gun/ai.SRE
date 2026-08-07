@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
@@ -65,10 +66,13 @@ class JiraClient:
     DASHBOARD_SEARCH_PATH = "/rest/api/3/dashboard/search"
     ISSUE_SEARCH_PATH = "/rest/api/3/search"
     ISSUE_PATH = "/rest/api/3/issue"
+    CREATE_META_PATH = "/rest/api/3/issue/createmeta"
     PROJECT_STATUSES_PATH_TEMPLATE = "/rest/api/3/project/{project_key}/statuses"
     ISSUE_SEARCH_JQL_PATH = "/rest/api/3/search/jql"
     TEAM_FIELD_ID = "customfield_11002"
     DEFAULT_TIMEOUT_SECONDS = 30
+    # Pause before recovery search after a failed creation attempt (seconds).
+    CREATION_RECOVERY_PAUSE_SECONDS = 3
 
     DEFAULT_ISSUE_FIELDS = [
         "summary",
@@ -515,3 +519,149 @@ class JiraClient:
             payload["comment"] = {"body": comment.strip()}
 
         return self._request("POST", "/rest/api/3/issueLink", json=payload)
+
+    # ------------------------------------------------------------------
+    # Field metadata (no probe issue required)
+    # ------------------------------------------------------------------
+
+    def get_create_meta(self, *, project_key: str, issue_type: str) -> Dict[str, Any]:
+        """Return field metadata for issue creation using the createmeta API.
+
+        Returns a dict ``{"fields": {field_id: {schema, allowedValues, ...}}}``
+        identical to the shape produced by the old editmeta endpoint, but without
+        creating any throwaway probe issue.
+        """
+        normalized_project_key = project_key.strip()
+        normalized_issue_type = issue_type.strip()
+        if not normalized_project_key:
+            raise JiraValidationError("project_key is required for create metadata lookup.")
+        if not normalized_issue_type:
+            raise JiraValidationError("issue_type is required for create metadata lookup.")
+
+        payload = self._request(
+            "GET",
+            self.CREATE_META_PATH,
+            params={
+                "projectKeys": normalized_project_key,
+                "issuetypeNames": normalized_issue_type,
+                "expand": "projects.issuetypes.fields",
+            },
+        )
+        projects = payload.get("projects", [])
+        if not isinstance(projects, list) or not projects:
+            raise JiraAPIError(
+                f"createmeta returned no projects for '{normalized_project_key}'."
+            )
+        issue_types = projects[0].get("issuetypes", [])
+        if not isinstance(issue_types, list) or not issue_types:
+            raise JiraAPIError(
+                f"createmeta returned no issue types for '{normalized_issue_type}' "
+                f"in project '{normalized_project_key}'."
+            )
+        fields = issue_types[0].get("fields", {})
+        if not isinstance(fields, dict):
+            raise JiraAPIError("createmeta fields have an unexpected shape.")
+        return {"fields": fields}
+
+    # ------------------------------------------------------------------
+    # Idempotent issue creation
+    # ------------------------------------------------------------------
+
+    def find_recent_issue(
+        self,
+        *,
+        project_key: str,
+        issue_type: str,
+        summary: str,
+        within_minutes: int = 30,
+    ) -> Optional[Dict[str, Any]]:
+        """Search for a recently created issue that exactly matches project/type/summary.
+
+        Returns the first matching issue dict or ``None``.  Never raises — a
+        search failure is treated as "not found" so callers can proceed safely.
+        """
+        escaped = summary.replace("\\", "\\\\").replace('"', '\\"')
+        jql = (
+            f'project = "{project_key}" AND issuetype = "{issue_type}" '
+            f'AND summary ~ "{escaped}" AND created >= "-{within_minutes}m" '
+            f'ORDER BY created DESC'
+        )
+        try:
+            issues = self.search_issues(
+                jql=jql,
+                limit=10,
+                fields=["summary", "status", "issuetype", "created"],
+            )
+        except (JiraAPIError, JiraValidationError):
+            return None
+        for issue in issues:
+            f = issue.get("fields") or {}
+            if str(f.get("summary", "")).strip().lower() == summary.strip().lower():
+                return issue
+        return None
+
+    def idempotent_create_issue(
+        self,
+        *,
+        project_key: str,
+        issue_type: str,
+        summary: str,
+        description: Optional[Any] = None,
+        assignee: Optional[str] = None,
+        priority: Optional[str] = None,
+        labels: Optional[List[str]] = None,
+        components: Optional[List[str]] = None,
+        extra_fields: Optional[Dict[str, Any]] = None,
+        verify_issue_type_available: bool = True,
+        recovery_window_minutes: int = 30,
+    ) -> Tuple[Dict[str, Any], str]:
+        """Create an issue idempotently; never leaves unreachable duplicate tickets.
+
+        Returns a tuple ``(issue_payload, action)`` where *action* is one of:
+        - ``"created"``            — fresh issue was created.
+        - ``"recovered_existing"`` — a matching issue already existed; reused it.
+        - ``"recovered_partial"``  — creation call failed but the issue was found
+                                     afterward (e.g. network timeout after commit);
+                                     the caller should update missing fields rather
+                                     than retrying creation.
+
+        Raises ``JiraAPIError`` or ``JiraValidationError`` only when creation
+        genuinely fails and no partial issue can be found.
+        """
+        # Step 1: pre-flight duplicate check.
+        existing = self.find_recent_issue(
+            project_key=project_key,
+            issue_type=issue_type,
+            summary=summary,
+            within_minutes=recovery_window_minutes,
+        )
+        if existing:
+            return existing, "recovered_existing"
+
+        # Step 2: attempt creation.
+        try:
+            created = self.create_issue(
+                project_key=project_key,
+                issue_type=issue_type,
+                summary=summary,
+                description=description,
+                assignee=assignee,
+                priority=priority,
+                labels=labels,
+                components=components,
+                extra_fields=extra_fields,
+                verify_issue_type_available=verify_issue_type_available,
+            )
+            return created, "created"
+        except (JiraAPIError, requests.RequestException):
+            # Step 3: pause, then search for a partial creation before giving up.
+            time.sleep(self.CREATION_RECOVERY_PAUSE_SECONDS)
+            recovered = self.find_recent_issue(
+                project_key=project_key,
+                issue_type=issue_type,
+                summary=summary,
+                within_minutes=5,
+            )
+            if recovered:
+                return recovered, "recovered_partial"
+            raise
