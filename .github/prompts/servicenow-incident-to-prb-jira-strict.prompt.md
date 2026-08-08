@@ -8,6 +8,11 @@ agent: "ServiceNow"
 
 Use this prompt with the ServiceNow agent to run deterministic incident enrichment, fresh problem creation, native ServiceNow->Jira routing when available, Jira-agent delegation otherwise, and strict incident resolution.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @ServiceNow, process incident <INC_NUMBER> with requested priority <TARGET_PRIORITY> and execute strict incident -> problem -> issue flow (native ServiceNow->Jira preferred, Jira-agent fallback).
 

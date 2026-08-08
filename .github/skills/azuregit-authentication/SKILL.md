@@ -8,6 +8,11 @@ keywords: ['azure-devops', 'azuregit', 'authentication', 'env', 'pat', 'validati
 
 This skill validates and normalizes Azure DevOps Git credentials from `.env` before repository and code discovery operations are executed.
 
+## Reuse-First Tooling Policy
+- Prefer existing promoted tooling, shared functions, and approved libraries before adding new automation.
+- If a new artifact is needed, extend the smallest existing one or make it promotion-ready with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
+- Avoid duplicate tooling and propagate any reusable change to relevant agents, prompts, skills, and docs.
+
 ## Required Environment Variables
 
 - `AZURE_ORG`

@@ -2,6 +2,11 @@
 
 Use this prompt with the ServiceNow agent after issue creation is completed (native ServiceNow->Jira preferred, Jira-agent delegation fallback).
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @ServiceNow, finalize incident <INC_NUMBER> using issue result and close workflow strictly.
 

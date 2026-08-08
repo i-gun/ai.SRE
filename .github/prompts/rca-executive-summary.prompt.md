@@ -9,6 +9,11 @@ agent: "RCA"
 
 Use this prompt to produce a leadership-ready executive summary from a completed RCA investigation, as a standalone artifact or for inclusion at the top of the full report.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @RCA, generate an executive summary for the following completed investigation.
 

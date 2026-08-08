@@ -8,6 +8,11 @@ keywords: ['jira', 'authentication', 'env', 'token', 'validation']
 
 This skill validates and normalizes Jira Cloud credentials from `.env` before operational project, dashboard, or issue actions are executed.
 
+## Reuse-First Tooling Policy
+- Prefer existing promoted tooling, shared functions, and approved libraries before adding new automation.
+- If a new artifact is needed, extend the smallest existing one or make it promotion-ready with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
+- Avoid duplicate tooling and propagate any reusable change to relevant agents, prompts, skills, and docs.
+
 ## Required Environment Variables
 
 - `JIRA_HOST`

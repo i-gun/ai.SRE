@@ -9,6 +9,11 @@ agent: "RCA"
 
 Use this prompt during Phase 3 (Synthesis and Challenge) to rigorously test each hypothesis before selecting a root cause.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @RCA, stress-test the following hypotheses against all available evidence.
 

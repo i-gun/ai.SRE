@@ -9,6 +9,11 @@ agent: "RCA"
 
 Use this prompt to initiate an RCA investigation. It performs scope lock and configuration validation before any data collection begins.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @RCA, perform intake for the following incident and prepare for investigation:
 

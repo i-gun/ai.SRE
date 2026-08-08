@@ -9,6 +9,11 @@ agent: "ServiceNow"
 
 Use this prompt with the ServiceNow agent to resolve one incident deterministically from caller-provided inputs.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @ServiceNow, resolve a single incident using strict input gates and provided closure details.
 

@@ -8,6 +8,11 @@ agent: "ServiceNow"
 
 Use this prompt with the ServiceNow agent to increase incident priority with strict scope, ownership, and approval confirmation gates.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @ServiceNow, raise priority of incident <INC_NUMBER> to <TARGET_PRIORITY>.
 

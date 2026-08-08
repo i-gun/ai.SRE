@@ -9,6 +9,11 @@ agent: "RCA"
 
 Use this prompt to perform targeted code attribution within the configured AzureGit scope. The agent must produce evidence-backed candidates or explicitly abstain — speculation is not permitted.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @RCA, execute AzureGit code attribution via rca-azuregit-attribution.
 

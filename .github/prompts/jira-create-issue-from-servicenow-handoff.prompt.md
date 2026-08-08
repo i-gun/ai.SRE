@@ -2,6 +2,11 @@
 
 Use this prompt with the Jira agent after ServiceNow confirms incident and problem context.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @Jira, create issue from ServiceNow handoff using strict field mapping and return a structured result.
 

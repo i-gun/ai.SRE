@@ -48,6 +48,13 @@ Credential handling rules:
 3. Redact auth-related errors in user-facing outputs
 4. Fail fast if mandatory variables are missing
 
+## Scripting & Automation Policy
+- Prefer existing promoted tooling, shared functions, and approved libraries before creating new automation.
+- If a new artifact is necessary, extend the smallest existing one or create a promotion-ready artifact with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
+- Avoid duplicate tooling; consolidate overlapping scripts and reference the maintained artifact.
+- When introducing or updating a reusable artifact, propagate the change to relevant agents, prompts, skills, and docs.
+- State the core/promoted tool choice and whether the work extends an existing artifact or creates a new one.
+
 # Core Capabilities
 
 ## Capability 1: Search Logs

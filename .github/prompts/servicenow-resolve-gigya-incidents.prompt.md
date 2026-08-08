@@ -9,6 +9,11 @@ agent: "ServiceNow"
 
 Use this prompt with the ServiceNow agent to find active, non-resolved Gigya incidents in scoped groups and resolve them with standardized closure fields.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @ServiceNow, fetch all active incidents not in state 'Resolved' in my scoped assignment groups where short description starts with "accounts.verifyEmail query result is >", assign to your configured user if unassigned, then resolve each incident.
 

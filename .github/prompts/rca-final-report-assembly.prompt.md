@@ -9,6 +9,11 @@ agent: "RCA"
 
 Use this prompt during Phase 4 (Reporting and Outputs) to assemble the final deliverable from all completed stream outputs.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @RCA, assemble the final RCA report using rca-report-authoring.
 

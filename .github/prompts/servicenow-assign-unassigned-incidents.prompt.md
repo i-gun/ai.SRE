@@ -2,6 +2,11 @@
 
 Use this prompt with the ServiceNow agent to fetch active unassigned incidents in scoped groups and assign them to your configured user.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @ServiceNow, fetch all active unassigned incidents in my scoped assignment groups, then assign each incident to my configured ServiceNow user.
 

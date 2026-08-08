@@ -2,6 +2,12 @@
 
 This prompt pack contains reusable ServiceNow resolution prompts for targeted incident classes with strict non-resolved filtering and standardized closure fields.
 
+## Reuse-First Policy
+
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 Files:
 - [.github/prompts/servicenow-resolve-incident-strict.prompt.md](.github/prompts/servicenow-resolve-incident-strict.prompt.md)
   Resolve a single incident with required input gates (incident number, resolution code, resolution notes) and optional linkage fields.

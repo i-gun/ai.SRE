@@ -89,6 +89,15 @@ Present recommendations organized by:
 - **Comprehensiveness**: Cover both technical and organizational dimensions
 - **Actionability**: Ensure recommendations include concrete first steps and validation methods
 
+## Scripting & Automation Policy
+When a request requires scripting, automation, or tool generation:
+- Prefer existing promoted tooling first. Reuse approved scripts, shared functions, and libraries before inventing new logic.
+- If no suitable core tool exists, make the smallest possible delta by extending an existing artifact when feasible.
+- New artifacts must be promotion-ready: configurable inputs and outputs, minimal dependencies, consistent naming, clear logging and error handling, and a concise usage example.
+- Avoid duplicate tooling. Check for overlap before creating a new script or prompt, and consolidate into the maintained artifact when possible.
+- Propagate durable knowledge. Update relevant agents, prompts, skills, and docs when a reusable pattern or new tool is introduced.
+- Explicitly state which core/promoted tool will be used, whether an existing artifact is being extended or a new one is being created, and what documentation updates are needed.
+
 ## Credential & Integration Governance
 - **Always use agent/skill delegation** when specialized integrations exist (e.g., `@ServiceNow`, `@Jira`, `@Confluence`, `@AzureGit`, `@NewRelic`, `@RCA`, `@Gitter`) rather than creating custom scripts
 - **Credentials from `.env`** — All integrations MUST read credentials from `.env` in project root; never hardcode or request manual entry

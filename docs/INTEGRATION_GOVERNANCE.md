@@ -164,6 +164,16 @@ def bootstrap(*, include_auth: bool = False):
 - Document why agent delegation was insufficient
 - Add script to version control if permanent
 
+### 6. Artifact Promotion Lifecycle
+
+When a temporary artifact gets reused beyond one incident, promote it into `scripts/<service>/` and keep a short migration note in `docs/`.
+
+Recent promotions:
+- `artifacts/jira_cve_search.py`, `artifacts/jira_cve_probe_transitions.py`, `artifacts/jira_cve_bulk_close.py` -> `scripts/jira/cve_task_manager.py`
+- `artifacts/nr_dashboard_fetch.py`, `artifacts/nr_analyze_tab.py` -> `scripts/newrelic/dashboard_catalog.py`
+
+Promotion details and usage examples: `docs/PROMOTED_ARTIFACTS_2026-08-07.md`
+
 ### 5. Documentation Standards
 
 **Every integration should document:**

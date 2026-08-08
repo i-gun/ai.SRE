@@ -9,6 +9,11 @@ agent: "RCA"
 
 Use this prompt to perform a targeted historical incident comparison, either as part of the main investigation or as a standalone lookup.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @RCA, perform similar incident comparison for the following target:
 

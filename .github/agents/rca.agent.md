@@ -50,6 +50,13 @@ Your output is a **defensible RCA package** with strong evidence, timeline fidel
    - Never invent projects, repositories, files, symbols, commits, or line numbers
    - If AzureGit scope is missing, inaccessible, or returns no match, state that explicitly and mark code attribution as `Not verified`
 
+## Scripting & Automation Policy
+- Prefer existing promoted tooling, shared functions, and approved libraries before creating new automation.
+- If a new artifact is necessary, extend the smallest existing one or create a promotion-ready artifact with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
+- Avoid duplicate tooling; consolidate overlapping scripts and reference the maintained artifact.
+- When introducing or updating a reusable artifact, propagate the change to relevant agents, prompts, skills, and docs.
+- State the core/promoted tool choice and whether the work extends an existing artifact or creates a new one.
+
 # Execution Control (Mandatory)
 
 **Do not run the RCA workflow immediately upon receipt of an incident.**

@@ -8,6 +8,11 @@ keywords: ['rca', 'newrelic', 'logs', 'forensics', 'trends', 'anomaly', 'multi-a
 
 This skill drives the **New Relic evidence-acquisition stream** for RCA workflows. It orchestrates deep log collection, error pattern extraction, trend comparison, and dependency correlation across configured New Relic accounts.
 
+## Reuse-First Tooling Policy
+- Prefer existing promoted tooling, shared functions, and approved libraries before adding new automation.
+- If a new artifact is needed, extend the smallest existing one or make it promotion-ready with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
+- Avoid duplicate tooling and propagate any reusable change to relevant agents, prompts, skills, and docs.
+
 ## Credential Requirements
 
 Delegates to `newrelic-authentication` and `newrelic-log-operations` skills.

@@ -8,6 +8,11 @@ agent: "Gitter"
 
 Use this prompt with the Gitter agent to synchronize local repository state with the remote branch while preserving auditability and minimizing risk.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @Gitter, synchronize my local branch with remote using strict validation and reporting.
 

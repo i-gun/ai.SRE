@@ -9,6 +9,11 @@ agent: "RCA"
 
 Use this prompt after `APPROVE_RUN_RCA` is issued. It launches all five evidence streams concurrently and runs analysis phases.
 
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```text
 @RCA, execute deep investigation for the approved incident.
 

@@ -4,6 +4,12 @@ Script path:
 
 `scripts\orchestration\newrelic_servicenow_alert_orchestrator.py`
 
+## Reuse-First Policy
+
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ## What it does
 
 For each open unacknowledged New Relic alert in scoped account `1679802`:

@@ -23,8 +23,9 @@ Return response as strict JSON with these keys:
 }
 
 Rules:
-- Always include status.
-- Never omit failure_reason on non-success states.
-- Use partial_success if primary action succeeds but validation/backpropagation is incomplete.
-- Use skipped only for explicit confirmation-gate stops.
+Reuse-first policy:
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 ```

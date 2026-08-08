@@ -8,6 +8,11 @@ keywords: ['rca', 'correlation', 'causality', 'hypothesis', 'evidence-synthesis'
 
 This skill drives the **synthesis stream** for RCA workflows. It receives evidence packets from all upstream streams, constructs a unified causal timeline, scores competing hypotheses, performs contradiction checking, and produces the final root cause determination.
 
+## Reuse-First Tooling Policy
+- Prefer existing promoted tooling, shared functions, and approved libraries before adding new automation.
+- If a new artifact is needed, extend the smallest existing one or make it promotion-ready with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
+- Avoid duplicate tooling and propagate any reusable change to relevant agents, prompts, skills, and docs.
+
 ## Inputs
 
 | Input | Type | Required | Description |

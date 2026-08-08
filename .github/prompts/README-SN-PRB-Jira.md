@@ -2,6 +2,12 @@
 
 This folder contains reusable prompts for strict incident to problem to Jira orchestration.
 
+## Reuse-First Policy
+
+- Prefer existing promoted tools and shared functions before creating new automation.
+- If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
+- Avoid duplicate tooling and consolidate overlap into the maintained artifact.
+
 Files:
 - [.github/prompts/servicenow-incident-to-prb-jira-strict.prompt.md](.github/prompts/servicenow-incident-to-prb-jira-strict.prompt.md)
   Primary orchestrator prompt for ServiceNow with confirmation gate, always-fresh PRB behavior, native ServiceNow->Jira preferred routing, Jira-agent fallback when native path is unavailable, and strict completion reporting.

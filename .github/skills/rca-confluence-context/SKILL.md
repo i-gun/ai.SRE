@@ -12,11 +12,11 @@ This skill drives the **Confluence knowledge-acquisition stream** for RCA workfl
 
 Delegates to `confluence-authentication` and `confluence-knowledge-operations` skills.
 Required variables in `.env`:
-- `CONFLUENCE_HOST`
-- `CONFLUENCE_USERNAME`
-- `CONFLUENCE_API_TOKEN`
-- `CONFLUENCE_SPACE_KEYS` (comma-separated list of Confluence space keys to scope searches)
 
+## Reuse-First Tooling Policy
+- Prefer existing promoted tooling, shared functions, and approved libraries before adding new automation.
+- If a new artifact is needed, extend the smallest existing one or make it promotion-ready with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
+- Avoid duplicate tooling and propagate any reusable change to relevant agents, prompts, skills, and docs.
 ## Inputs
 
 | Input | Type | Required | Description |
