@@ -12,9 +12,15 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
-from common import bootstrap
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_ROOT = PROJECT_ROOT / "scripts"
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from servicenow.common import bootstrap
 
 bootstrap(override_env=True)
 

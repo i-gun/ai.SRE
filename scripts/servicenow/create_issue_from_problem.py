@@ -14,8 +14,14 @@ import sys
 import argparse
 import json
 import re
+from pathlib import Path
 
-from common import bootstrap
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_ROOT = PROJECT_ROOT / "scripts"
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from servicenow.common import bootstrap
 
 bootstrap(override_env=True)
 

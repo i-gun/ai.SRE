@@ -16,6 +16,9 @@ SERVICENOW_SCRIPTS = PROJECT_ROOT / "scripts" / "servicenow"
 
 
 def _load_module(module_name: str, path: Path):
+    # Guard against cross-test pollution where another script family preloads
+    # a different top-level `common` module into sys.modules.
+    sys.modules.pop("common", None)
     if str(path.parent) not in sys.path:
         sys.path.insert(0, str(path.parent))
     spec = importlib.util.spec_from_file_location(module_name, path)

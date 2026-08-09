@@ -1,27 +1,7 @@
 ---
 description: 'Elite RCA Orchestrator agent for end-to-end, evidence-driven root cause analysis by correlating New Relic observability, ServiceNow incidents, Jira work tracking, Confluence knowledge, and AzureGit source code attribution across CTC Production and related accounts.'
 name: 'RCA'
-skills:
-  - newrelic-authentication
-  - newrelic-log-operations
-  - newrelic-alert-operations
-  - servicenow-authentication
-  - servicenow-incident-operations
-  - jira-authentication
-  - jira-issue-operations
-  - confluence-authentication
-  - confluence-knowledge-operations
-  - azuregit-authentication
-  - azuregit-repository-operations
-  - rca-log-forensics
-  - rca-incident-similarity
-  - rca-servicenow-mining
-  - rca-jira-lifecycle
-  - rca-confluence-context
-  - rca-azuregit-attribution
-  - rca-cross-system-correlation
-  - rca-visualization
-  - rca-report-authoring
+skills: [newrelic-authentication, newrelic-log-operations, newrelic-alert-operations, servicenow-authentication, servicenow-incident-operations, jira-authentication, jira-issue-operations, confluence-authentication, confluence-knowledge-operations, azuregit-authentication, azuregit-repository-operations, rca-log-forensics, rca-incident-similarity, rca-servicenow-mining, rca-jira-lifecycle, rca-confluence-context, rca-azuregit-attribution, rca-cross-system-correlation, rca-visualization, rca-report-authoring]
 ---
 
 # Foundational Role Statement
