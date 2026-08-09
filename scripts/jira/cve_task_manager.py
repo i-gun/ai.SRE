@@ -44,6 +44,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     bulk.add_argument("--execute", action="store_true", help="Apply changes. Default is dry-run.")
     bulk.add_argument("--sleep-ms", type=int, default=250, help="Delay between write calls when executing")
 
+    chain = subparsers.add_parser(
+        "chain-check",
+        help="Validate DDL→parent/label/BET chain for a CVE+kind pair (5-tier JQL)",
+    )
+    chain.add_argument("--cve", required=True, help="CVE or GHSA identifier, e.g. CVE-2016-7051")
+    chain.add_argument("--kind", required=True, help="Service group kind, e.g. 'CDS' or 'DTE, Inventory'")
+    chain.add_argument("--ddl-parent", default="DDL-28477", help="Expected DDL parent key (default: DDL-28477)")
+    chain.add_argument("--required-label", default="L2toL3", help="Required DDL label (default: L2toL3)")
+    chain.add_argument("--limit", type=int, default=5, help="Max results per JQL tier (default: 5)")
+
     return parser.parse_args(argv)
 
 
@@ -236,6 +246,126 @@ def choose_resolution_id(resolutions: List[Dict[str, Any]]) -> str:
     return by_name.get("Done") or by_name.get("Duplicate") or ""
 
 
+# JQL tiers used by chain-check — ordered from most to least specific.
+_CHAIN_JQL_TIERS = [
+    ("JQL1", "project = DDL AND parent = {ddl_parent} AND text ~ \"{cve}\" ORDER BY created DESC"),
+    ("JQL2", "project = DDL AND parent = {ddl_parent} AND summary ~ \"[{kind}]\" AND text ~ \"{cve}\" ORDER BY created DESC"),
+    ("JQL3", "project = DDL AND parent = {ddl_parent} AND labels = {label} AND text ~ \"{cve}\" ORDER BY created DESC"),
+    ("JQL4", "project = DDL AND text ~ \"{cve}\" AND summary ~ \"[{kind}]\" ORDER BY created DESC"),
+    ("JQL5", "project = BET AND text ~ \"{cve}\" AND summary ~ \"[{kind}]\" ORDER BY created DESC"),
+]
+
+
+def _slim_issue(issue: Dict[str, Any]) -> Dict[str, Any]:
+    fields = issue.get("fields") or {}
+    parent = fields.get("parent") or {}
+    links = [
+        ((lnk.get("outwardIssue") or lnk.get("inwardIssue")) or {}).get("key")
+        for lnk in (fields.get("issuelinks") or [])
+    ]
+    return {
+        "key": issue.get("key"),
+        "summary": fields.get("summary"),
+        "status": ((fields.get("status") or {}).get("name")),
+        "labels": fields.get("labels") or [],
+        "parent": parent.get("key"),
+        "links": [k for k in links if k],
+    }
+
+
+def _search_jql(host: str, auth: HTTPBasicAuth, jql: str, limit: int) -> List[Dict[str, Any]]:
+    data = request_json(
+        "POST", host, auth, "/rest/api/3/search/jql",
+        payload={
+            "jql": jql,
+            "maxResults": limit,
+            "fields": ["summary", "status", "labels", "parent", "issuelinks"],
+        },
+    )
+    return [_slim_issue(i) for i in data.get("issues", [])]
+
+
+def run_chain_check(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) -> Dict[str, Any]:
+    tier_results: Dict[str, Any] = {}
+    for tier_name, jql_template in _CHAIN_JQL_TIERS:
+        jql = jql_template.format(
+            cve=args.cve, kind=args.kind,
+            ddl_parent=args.ddl_parent, label=args.required_label,
+        )
+        try:
+            hits = _search_jql(host, auth, jql, args.limit)
+        except Exception as exc:  # pylint: disable=broad-except
+            tier_results[tier_name] = {"error": str(exc)[:300]}
+            continue
+        tier_results[tier_name] = hits
+
+    # Collect unique DDL and BET candidates across all tiers.
+    ddl_candidates: Dict[str, Dict[str, Any]] = {}
+    bet_candidates: Dict[str, Dict[str, Any]] = {}
+    for tier_name, hits in tier_results.items():
+        if isinstance(hits, dict):  # error entry
+            continue
+        for issue in hits:
+            key = issue.get("key") or ""
+            if key.startswith("DDL-"):
+                ddl_candidates.setdefault(key, issue)
+            elif key.startswith("BET-"):
+                bet_candidates.setdefault(key, issue)
+
+    # Evaluate the best DDL candidate (newest non-closed preferred).
+    def _score(issue: Dict[str, Any]) -> int:
+        score = 0
+        if (issue.get("parent") or "") == args.ddl_parent:
+            score += 4
+        if args.required_label in (issue.get("labels") or []):
+            score += 2
+        if (issue.get("status") or "").lower() != "done":
+            score += 1
+        return score
+
+    best_ddl = max(ddl_candidates.values(), key=_score) if ddl_candidates else None
+
+    has_parent = (best_ddl or {}).get("parent") == args.ddl_parent if best_ddl else False
+    has_label = args.required_label in ((best_ddl or {}).get("labels") or []) if best_ddl else False
+    bet_linked = bool(
+        best_ddl and any(k in bet_candidates for k in (best_ddl.get("links") or []))
+    ) if best_ddl else False
+    # BET may also be found via JQL5 without a link.
+    has_bet = bet_linked or bool(bet_candidates)
+
+    if not best_ddl:
+        chain_status = "no_chain"
+    elif has_parent and has_label and has_bet:
+        chain_status = "complete"
+    else:
+        chain_status = "partial"
+
+    gaps: List[str] = []
+    if not best_ddl:
+        gaps.append("no_ddl_found")
+    else:
+        if not has_parent:
+            gaps.append(f"missing_parent_{args.ddl_parent}")
+        if not has_label:
+            gaps.append(f"missing_label_{args.required_label}")
+        if not has_bet:
+            gaps.append("no_bet_linked_or_found")
+
+    return {
+        "command": "chain-check",
+        "cve": args.cve,
+        "kind": args.kind,
+        "ddl_parent": args.ddl_parent,
+        "required_label": args.required_label,
+        "chain_status": chain_status,
+        "gaps": gaps,
+        "best_ddl": best_ddl,
+        "bet_candidates": list(bet_candidates.values()),
+        "all_ddl_candidates": list(ddl_candidates.values()),
+        "tier_results": tier_results,
+    }
+
+
 def run_bulk_close(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) -> Dict[str, Any]:
     issue_keys = extract_issue_keys(args.issue_keys, args.issue_file)
     if not issue_keys:
@@ -345,6 +475,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         output = run_probe(args, host, auth)
     elif args.command == "bulk-close":
         output = run_bulk_close(args, host, auth)
+    elif args.command == "chain-check":
+        output = run_chain_check(args, host, auth)
     else:
         raise RuntimeError(f"Unsupported command: {args.command}")
 

@@ -115,6 +115,27 @@ Behavior:
 - Default link type to `Relates` when omitted
 - Optionally add a comment after link creation when requested
 
+### 9. CVE DDL Handoff Payload Mapping
+For CVE INC->PRB->DDL handoff flows, use promoted script:
+- `python scripts/jira/create_issue_from_servicenow_handoff.py`
+
+Supported CVE-focused flags:
+- `--kind <KIND>`
+- `--current-release <VERSION>`
+- `--upcoming-release <VERSION>`
+
+Expected behavior for DDL dry-run/execute payloads:
+- Summary uses New Relic short description text
+- Labels include `L2toL3`, `ODP`, `SRE`, and kind-derived labels
+	- `DTE, Inventory` maps to separate `DTE` and `Inventory` labels
+- Banner default selection: both `CanadianTire` and `SportChek` when Banner field supports multi-select
+	- If Banner is single-select on the target project, apply first available default and require manual live follow-up
+- Components mapped from kind as selectable field values
+- Root cause selectable value: `Code` (when field exists)
+- Fix versions from upcoming release input and affected version from current release input
+	- Release values should be derived from Digital Release Calendar closest-date mapping for current vs upcoming windows
+- Exclude `RCA_Code` label and avoid evidence-metadata blocks in description templates
+
 ## API Endpoints Used
 
 - `GET /rest/api/3/project/search`

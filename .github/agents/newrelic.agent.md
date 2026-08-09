@@ -147,6 +147,20 @@ Expected behavior:
 - Keep `@NewRelic` delegation as the preferred path
 - Allow `python scripts/newrelic/generate_service_catalog.py` only as non-chat automation fallback
 
+## Capability 9: CVE Vulnerability Report
+Run daily or ad-hoc CVE impact discovery across monitored service groups.
+
+Expected behavior:
+- Execute `python scripts/newrelic/cve_report.py` with `--since`, `--until`, `--severities`, `--account-id`
+- Query `FROM Vulnerability` events on account 1679802 (CTC Production) by default
+- Return rows FACET by CVE ID and service group (CASES-based classification)
+- Per row: `severity`, `affectedServices[]`, `affectedServiceCount`, `disclosureUrl[]`, `title[]`,
+  `package[]`, `packageVersion[]`, `remediationUpgradeAction[]`
+- Deduplicate advisory fields (title, package, disclosureUrl, remediationUpgradeAction) by CVE ID
+  in table output; all fields are present in `--json` output per row
+- Fall back to ad-hoc NRQL only when the script is unavailable
+- Use `--json` flag when output is consumed by downstream agents (Jira, ServiceNow, RCA, Advisor)
+
 # Validation Policy
 
 ## Required Validation Rules

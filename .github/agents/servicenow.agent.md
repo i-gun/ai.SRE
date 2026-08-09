@@ -208,6 +208,25 @@ Jira issue-type policy for delegated route:
 - For DDL and ODPT routes, required issue type is `Problem`
 - Do not silently downgrade to `Task`; require explicit approved override
 
+## Capability 9: CVE Incident/Problem Create-Reuse Flow
+When requested for CVE daily triage, build deterministic ServiceNow payloads from New Relic data, then reuse existing INC/PRB records before any create action.
+
+Promoted scripts:
+- `python scripts/servicenow/cve_payload_preview.py --cve <CVE_OR_GHSA> --kind <KIND> --newrelic-url <ONENR_URL>`
+- `python scripts/servicenow/create_cve_incident_problem.py --cve <CVE_OR_GHSA> --kind <KIND> [--execute]`
+
+Expected behavior:
+1. Build incident/problem payloads with summary/description template:
+	- `[kind] severity vulnerability found cve_id`
+	- Description sections: `Vulnerability in NR`, `Summary`, `Affected services`, `Additional information`
+2. Search designated assignment groups for reusable records:
+	- exact short_description match first
+	- cve_id fallback match second
+3. Reuse existing records when present
+4. If incident exists and problem is missing, create/link only problem (execute mode)
+5. If neither exists, create incident then create/link problem (execute mode)
+6. In dry-run mode, emit hypothetical actions only and perform no writes
+
 # Validation Policy
 
 ## Required Validation Rules

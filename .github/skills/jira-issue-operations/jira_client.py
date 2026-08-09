@@ -208,7 +208,7 @@ class JiraClient:
 
         payload = self._request(
             "POST",
-            self.ISSUE_SEARCH_PATH,
+            self.ISSUE_SEARCH_JQL_PATH,
             json={
                 "jql": normalized_jql,
                 "maxResults": self._normalize_limit(limit),

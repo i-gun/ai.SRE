@@ -150,6 +150,24 @@ Deterministic default pair by target priority:
 ### 7. Raise Problem (PRB) From Incident And Link
 Create a problem from an existing incident and link records.
 
+
+### 10. Build CVE Incident/Problem Payload Preview
+Generate deterministic, dry-run ServiceNow incident/problem payloads from New Relic CVE data.
+
+Promoted script:
+- `python scripts/servicenow/cve_payload_preview.py --cve <CVE_OR_GHSA> --kind <KIND> --newrelic-url <ONENR_URL>`
+
+Expected behavior:
+- Uses New Relic grouped and detail queries to compose ServiceNow-ready payloads
+- Incident and Problem `short_description` format:
+    - `[kind] severity vulnerability found cve_id`
+- Description format:
+    - `Vulnerability in NR - <newrelic_url>`
+    - `Summary:` (title/details from New Relic)
+    - `Affected services:` (`service | package | package.version | remediation.upgradeAction`)
+    - `Additional information:` (`disclosureUrl`)
+- Excludes explicit metadata lines (`CVE`, `Severity`, `Kind`, `Window`) in description body
+- Returns JSON payload preview only; does not create or update records
 Behavior:
 - Resolve incident by `number` or `sys_id`
 - Create `problem` record with required mapping:
@@ -192,6 +210,28 @@ Validation:
 - Source problem must exist
 - Routing project must be DDL or ODPT for standard flows
 - Never silently downgrade required issue type from `Problem` to `Task`
+
+### 11. CVE Incident/Problem Create-Reuse Execution (Dry-Run or Execute)
+Create or reuse Incident/Problem records for a CVE+kind pair using the deterministic CVE payload template.
+
+Promoted script:
+- `python scripts/servicenow/create_cve_incident_problem.py --cve <CVE_OR_GHSA> --kind <KIND> [--execute]`
+
+Behavior:
+- Generates payload preview from New Relic grouped+detail data (same template as Capability 10)
+- Reuse discovery order within designated assignment groups:
+    - Exact short_description match
+    - Fallback `short_descriptionLIKE<cve_id>`
+- Decision policy:
+    - Reuse both INC/PRB when both exist
+    - If INC exists and PRB missing, create PRB from incident (execute mode only)
+    - If neither exists, create INC then create PRB link (execute mode only)
+- Default mode is dry-run and returns hypothetical actions without writes
+
+Validation:
+- In execute mode, `caller_id` is required when a new incident must be created
+- Assignment group scope must remain within `SERVICENOW_ASSIGNMENT_GROUPS`
+- Output must include payload preview, reuse search evidence, action decision, and created record summaries
 
 ## API Endpoints Used
 
