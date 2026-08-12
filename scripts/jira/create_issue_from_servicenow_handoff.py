@@ -47,6 +47,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from bootstrap_shared import bootstrap_paths
+from jira.adf_common import text_to_adf
 
 JIRA_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "jira-issue-operations"
 bootstrap_paths(skill_paths=[JIRA_SKILL_PATH], override_env=True)
@@ -247,14 +248,6 @@ def build_multi_select_payload(field_meta: Dict[str, Any], option_ids: List[str]
     return {"id": option_ids[0]} if option_ids else {}
 
 
-def to_adf(text: str) -> Dict[str, Any]:
-    return {
-        "type": "doc",
-        "version": 1,
-        "content": [{"type": "paragraph", "content": [{"type": "text", "text": text}]}],
-    }
-
-
 def make_summary(incident_summary: str) -> str:
     return (incident_summary or "").strip()
 
@@ -437,7 +430,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             project_key=routing_project,
             issue_type=required_issue_type,
             summary=summary,
-            description=to_adf(description),
+            description=text_to_adf(description),
             priority=DDL_PRIORITY,
             labels=labels,
             extra_fields=extra_fields,

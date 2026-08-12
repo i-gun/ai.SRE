@@ -10,119 +10,11 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from common import bootstrap
 from cve_payload_preview import build_payload_preview
+from reuse_common import extract_ref, find_incident_candidates, find_problem_candidates
 
 bootstrap(override_env=True)
 
 from servicenow_client import ServiceNowClient, ServiceNowValidationError
-
-
-def _extract_ref(value: Any) -> str:
-    if isinstance(value, dict):
-        raw = value.get("value") or value.get("display_value") or ""
-        return str(raw).strip()
-    return str(value or "").strip()
-
-
-def _state_rank(client: ServiceNowClient, state: Any) -> int:
-    # Prefer active/non-resolved records when selecting reuse candidates.
-    return 1 if client.is_resolved_state(state) else 0
-
-
-def _sort_key(client: ServiceNowClient, item: Dict[str, Any]) -> tuple[int, str]:
-    return (
-        _state_rank(client, item.get("state")),
-        str(item.get("sys_updated_on") or ""),
-    )
-
-
-def _find_incident_candidates(
-    client: ServiceNowClient,
-    *,
-    exact_short_description: str,
-    cve_id: str,
-    limit: int,
-) -> Dict[str, Any]:
-    exact = client.query_incidents(query_parts=[f"short_description={exact_short_description}"], limit=limit)
-    fallback = client.query_incidents(query_parts=[f"short_descriptionLIKE{cve_id}"], limit=limit)
-
-    all_candidates: Dict[str, Dict[str, Any]] = {}
-    for row in exact + fallback:
-        sys_id = _extract_ref(row.get("sys_id"))
-        if not sys_id:
-            continue
-        all_candidates[sys_id] = row
-
-    best = None
-    if all_candidates:
-        best = sorted(all_candidates.values(), key=lambda item: _sort_key(client, item))[0]
-
-    return {
-        "exact_matches": exact,
-        "fallback_matches": fallback,
-        "best": best,
-    }
-
-
-def _query_problems(
-    client: ServiceNowClient,
-    *,
-    query_parts: List[str],
-    limit: int,
-) -> List[Dict[str, Any]]:
-    scoped_parts = [
-        "assignment_group.nameIN" + ",".join(client.config.assignment_groups),
-    ]
-    scoped_parts.extend(part for part in query_parts if str(part or "").strip())
-    result = client._request(  # pylint: disable=protected-access
-        "GET",
-        client.PROBLEM_TABLE_PATH,
-        params={
-            "sysparm_query": "^".join(scoped_parts),
-            "sysparm_limit": limit,
-            "sysparm_fields": ",".join(client.PROBLEM_FIELDS + ["state"]),
-            "sysparm_display_value": "true",
-            "sysparm_exclude_reference_link": "true",
-            "sysparm_order_by_desc": "sys_updated_on",
-        },
-    )
-    return result.get("result", [])
-
-
-def _find_problem_candidates(
-    client: ServiceNowClient,
-    *,
-    exact_short_description: str,
-    cve_id: str,
-    linked_problem_number: str,
-    limit: int,
-) -> Dict[str, Any]:
-    linked: List[Dict[str, Any]] = []
-    if linked_problem_number:
-        try:
-            linked = [client._find_problem(problem_number=linked_problem_number)]  # pylint: disable=protected-access
-        except Exception:  # pylint: disable=broad-except
-            linked = []
-
-    exact = _query_problems(client, query_parts=[f"short_description={exact_short_description}"], limit=limit)
-    fallback = _query_problems(client, query_parts=[f"short_descriptionLIKE{cve_id}"], limit=limit)
-
-    all_candidates: Dict[str, Dict[str, Any]] = {}
-    for row in linked + exact + fallback:
-        sys_id = _extract_ref(row.get("sys_id"))
-        if not sys_id:
-            continue
-        all_candidates[sys_id] = row
-
-    best = None
-    if all_candidates:
-        best = sorted(all_candidates.values(), key=lambda item: _sort_key(client, item))[0]
-
-    return {
-        "linked_matches": linked,
-        "exact_matches": exact,
-        "fallback_matches": fallback,
-        "best": best,
-    }
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -162,10 +54,10 @@ def _record_stub(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not row:
         return None
     return {
-        "number": _extract_ref(row.get("number")),
-        "sys_id": _extract_ref(row.get("sys_id")),
-        "short_description": _extract_ref(row.get("short_description")),
-        "state": _extract_ref(row.get("state")),
+        "number": extract_ref(row.get("number")),
+        "sys_id": extract_ref(row.get("sys_id")),
+        "short_description": extract_ref(row.get("short_description")),
+        "state": extract_ref(row.get("state")),
     }
 
 
@@ -222,19 +114,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     client = ServiceNowClient.from_env()
 
-    incident_matches = _find_incident_candidates(
+    incident_matches = find_incident_candidates(
         client,
         exact_short_description=short_description,
-        cve_id=args.cve.strip(),
+        fallback_terms=[args.cve.strip()],
         limit=args.limit,
     )
     best_incident = incident_matches.get("best")
-    linked_problem_number = _extract_ref((best_incident or {}).get("problem_id"))
+    linked_problem_number = extract_ref((best_incident or {}).get("problem_id"))
 
-    problem_matches = _find_problem_candidates(
+    problem_matches = find_problem_candidates(
         client,
         exact_short_description=short_description,
-        cve_id=args.cve.strip(),
+        fallback_terms=[args.cve.strip()],
         linked_problem_number=linked_problem_number,
         limit=args.limit,
     )
@@ -326,7 +218,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if not best_problem:
         created_problem_bundle = client.create_problem_from_incident(
-            incident_number=_extract_ref(best_incident.get("number")),
+            incident_number=extract_ref(best_incident.get("number")),
             problem_short_description=str(problem_payload.get("short_description") or short_description),
             problem_description=str(problem_payload.get("description") or description),
             work_note="Linked Problem created by CVE create/reuse flow (execute mode).",

@@ -5,13 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional
 
-import requests
 from requests.auth import HTTPBasicAuth
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -19,9 +17,9 @@ SCRIPTS_ROOT = PROJECT_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from bootstrap_shared import bootstrap_paths
-
-JIRA_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "jira-issue-operations"
+from jira.http_common import load_config, request_json
+from jira.adf_common import text_to_adf
+from jira.chain_check_common import collect_project_candidates, evaluate_chain, run_tiered_queries
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -55,56 +53,6 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     chain.add_argument("--limit", type=int, default=5, help="Max results per JQL tier (default: 5)")
 
     return parser.parse_args(argv)
-
-
-def load_config() -> Tuple[str, HTTPBasicAuth]:
-    bootstrap_paths(skill_paths=[JIRA_SKILL_PATH], override_env=True)
-
-    host = os.getenv("JIRA_HOST", "").strip().rstrip("/")
-    username = os.getenv("JIRA_USERNAME", "").strip()
-    api_token = os.getenv("JIRA_API_TOKEN", "").strip()
-
-    missing = [
-        name
-        for name, value in [
-            ("JIRA_HOST", host),
-            ("JIRA_USERNAME", username),
-            ("JIRA_API_TOKEN", api_token),
-        ]
-        if not value
-    ]
-    if missing:
-        raise RuntimeError(f"Missing Jira credentials: {', '.join(missing)}")
-
-    return host, HTTPBasicAuth(username, api_token)
-
-
-def request_json(
-    method: str,
-    host: str,
-    auth: HTTPBasicAuth,
-    path: str,
-    *,
-    payload: Optional[Dict[str, Any]] = None,
-    params: Optional[Dict[str, Any]] = None,
-) -> Any:
-    headers = {"Accept": "application/json"}
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-
-    response = requests.request(
-        method,
-        f"{host}{path}",
-        auth=auth,
-        headers=headers,
-        json=payload,
-        params=params,
-        timeout=30,
-    )
-    response.raise_for_status()
-    if not response.text:
-        return {}
-    return response.json()
 
 
 def run_search(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) -> Dict[str, Any]:
@@ -183,19 +131,6 @@ def run_probe(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) -> Dict[
     }
 
 
-def adf_text(message: str) -> Dict[str, Any]:
-    return {
-        "type": "doc",
-        "version": 1,
-        "content": [
-            {
-                "type": "paragraph",
-                "content": [{"type": "text", "text": message}],
-            }
-        ],
-    }
-
-
 def extract_issue_keys(cli_keys: Iterable[str], issue_file: Optional[str]) -> List[str]:
     keys = [key.strip().upper() for key in cli_keys if key and key.strip()]
     if issue_file:
@@ -256,89 +191,41 @@ _CHAIN_JQL_TIERS = [
 ]
 
 
-def _slim_issue(issue: Dict[str, Any]) -> Dict[str, Any]:
-    fields = issue.get("fields") or {}
-    parent = fields.get("parent") or {}
-    links = [
-        ((lnk.get("outwardIssue") or lnk.get("inwardIssue")) or {}).get("key")
-        for lnk in (fields.get("issuelinks") or [])
-    ]
-    return {
-        "key": issue.get("key"),
-        "summary": fields.get("summary"),
-        "status": ((fields.get("status") or {}).get("name")),
-        "labels": fields.get("labels") or [],
-        "parent": parent.get("key"),
-        "links": [k for k in links if k],
-    }
-
-
-def _search_jql(host: str, auth: HTTPBasicAuth, jql: str, limit: int) -> List[Dict[str, Any]]:
-    data = request_json(
-        "POST", host, auth, "/rest/api/3/search/jql",
-        payload={
-            "jql": jql,
-            "maxResults": limit,
-            "fields": ["summary", "status", "labels", "parent", "issuelinks"],
-        },
-    )
-    return [_slim_issue(i) for i in data.get("issues", [])]
-
-
 def run_chain_check(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) -> Dict[str, Any]:
+    tiers = [
+        {
+            "name": tier_name,
+            "jql": jql_template.format(
+                cve=args.cve,
+                kind=args.kind,
+                ddl_parent=args.ddl_parent,
+                label=args.required_label,
+            ),
+        }
+        for tier_name, jql_template in _CHAIN_JQL_TIERS
+    ]
+    tier_entries = run_tiered_queries(host, auth, tiers=tiers, limit=args.limit)
+    candidates = collect_project_candidates(tier_entries)
+    eval_result = evaluate_chain(
+        ddl_candidates=candidates["ddl"],
+        bet_candidates=candidates["bet"],
+        ddl_parent=args.ddl_parent,
+        required_label=args.required_label,
+    )
+
+    best_ddl = eval_result["best_ddl"]
+    has_parent = eval_result["has_parent"]
+    has_label = eval_result["has_label"]
+    has_bet = eval_result["has_bet"]
+    chain_status = eval_result["chain_status"]
+
     tier_results: Dict[str, Any] = {}
-    for tier_name, jql_template in _CHAIN_JQL_TIERS:
-        jql = jql_template.format(
-            cve=args.cve, kind=args.kind,
-            ddl_parent=args.ddl_parent, label=args.required_label,
-        )
-        try:
-            hits = _search_jql(host, auth, jql, args.limit)
-        except Exception as exc:  # pylint: disable=broad-except
-            tier_results[tier_name] = {"error": str(exc)[:300]}
-            continue
-        tier_results[tier_name] = hits
-
-    # Collect unique DDL and BET candidates across all tiers.
-    ddl_candidates: Dict[str, Dict[str, Any]] = {}
-    bet_candidates: Dict[str, Dict[str, Any]] = {}
-    for tier_name, hits in tier_results.items():
-        if isinstance(hits, dict):  # error entry
-            continue
-        for issue in hits:
-            key = issue.get("key") or ""
-            if key.startswith("DDL-"):
-                ddl_candidates.setdefault(key, issue)
-            elif key.startswith("BET-"):
-                bet_candidates.setdefault(key, issue)
-
-    # Evaluate the best DDL candidate (newest non-closed preferred).
-    def _score(issue: Dict[str, Any]) -> int:
-        score = 0
-        if (issue.get("parent") or "") == args.ddl_parent:
-            score += 4
-        if args.required_label in (issue.get("labels") or []):
-            score += 2
-        if (issue.get("status") or "").lower() != "done":
-            score += 1
-        return score
-
-    best_ddl = max(ddl_candidates.values(), key=_score) if ddl_candidates else None
-
-    has_parent = (best_ddl or {}).get("parent") == args.ddl_parent if best_ddl else False
-    has_label = args.required_label in ((best_ddl or {}).get("labels") or []) if best_ddl else False
-    bet_linked = bool(
-        best_ddl and any(k in bet_candidates for k in (best_ddl.get("links") or []))
-    ) if best_ddl else False
-    # BET may also be found via JQL5 without a link.
-    has_bet = bet_linked or bool(bet_candidates)
-
-    if not best_ddl:
-        chain_status = "no_chain"
-    elif has_parent and has_label and has_bet:
-        chain_status = "complete"
-    else:
-        chain_status = "partial"
+    for tier in tier_entries:
+        tier_name = str(tier.get("tier") or "")
+        if tier.get("error"):
+            tier_results[tier_name] = {"error": tier.get("error")}
+        else:
+            tier_results[tier_name] = tier.get("issues", [])
 
     gaps: List[str] = []
     if not best_ddl:
@@ -360,8 +247,8 @@ def run_chain_check(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) ->
         "chain_status": chain_status,
         "gaps": gaps,
         "best_ddl": best_ddl,
-        "bet_candidates": list(bet_candidates.values()),
-        "all_ddl_candidates": list(ddl_candidates.values()),
+        "bet_candidates": list(candidates["bet"].values()),
+        "all_ddl_candidates": list(candidates["ddl"].values()),
         "tier_results": tier_results,
     }
 
@@ -404,7 +291,7 @@ def run_bulk_close(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) -> 
                         host,
                         auth,
                         f"/rest/api/3/issue/{issue_key}/comment",
-                        payload={"body": adf_text(comment_text)},
+                        payload={"body": text_to_adf(comment_text)},
                     )
                     comment_action = "added"
                     time.sleep(max(args.sleep_ms, 0) / 1000.0)
