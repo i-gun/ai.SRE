@@ -125,6 +125,7 @@ def evaluate_chain(
     bet_candidates: Dict[str, Dict[str, Any]],
     ddl_parent: str,
     required_label: str,
+    require_bet: bool = True,
 ) -> Dict[str, Any]:
     def _score(issue: Dict[str, Any]) -> int:
         score = 0
@@ -148,7 +149,7 @@ def evaluate_chain(
 
     if not best_ddl:
         chain_status = "no_chain"
-    elif has_parent and has_label and has_bet:
+    elif has_parent and has_label and (has_bet or not require_bet):
         chain_status = "complete"
     else:
         chain_status = "partial"

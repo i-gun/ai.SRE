@@ -1,10 +1,25 @@
 ---
-name: "Daily Expiring Secrets Orchestrator"
-description: "Run daily expiring Azure Key Vault secrets discovery and reuse-or-create escalation across New Relic, ServiceNow, and Jira for the Digital business unit."
+name: "Daily Expiring Secrets Orchestrator (Deprecated)"
+description: "DEPRECATED: superseded by expiring-secrets-analysis.prompt.md + expiring-secrets-execute.prompt.md. This wrapper only runs the read-only analysis half by default and never auto-chains into execute."
 agent: "Advisor"
 ---
 
-# Daily Expiring Secrets Orchestrator
+# Daily Expiring Secrets Orchestrator (Deprecated)
+
+> **Deprecated.** This monolithic prompt is retained for backward compatibility only.
+> Use the decoupled pair instead:
+> - [expiring-secrets-analysis.prompt.md](./expiring-secrets-analysis.prompt.md) — default,
+>   read-only data retrieval/classification, persists a `resolution_matrix` artifact.
+> - [expiring-secrets-execute.prompt.md](./expiring-secrets-execute.prompt.md) — complementary
+>   flow that loads that artifact, re-validates freshness, re-checks live state, and requires
+>   explicit operator confirmation before raising/repairing any Incident/Problem/DDL/BET.
+>
+> Running this wrapper executes **only** the analysis flow described in
+> [expiring-secrets-analysis.prompt.md](./expiring-secrets-analysis.prompt.md) end to end
+> (Phases 1-4 there, including persisting the resolution_matrix artifact) and then **stops**.
+> It does not run the execute flow automatically under any circumstance — the operator must
+> invoke [expiring-secrets-execute.prompt.md](./expiring-secrets-execute.prompt.md) separately
+> and confirm before any write occurs. This preserves today's default dry-run behavior exactly.
 
 Use this prompt to run the daily expiring secrets flow with strict reuse-before-create behavior.
 

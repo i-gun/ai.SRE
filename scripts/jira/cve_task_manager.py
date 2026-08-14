@@ -211,6 +211,7 @@ def run_chain_check(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) ->
         bet_candidates=candidates["bet"],
         ddl_parent=args.ddl_parent,
         required_label=args.required_label,
+        require_bet=False,
     )
 
     best_ddl = eval_result["best_ddl"]
@@ -235,8 +236,6 @@ def run_chain_check(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) ->
             gaps.append(f"missing_parent_{args.ddl_parent}")
         if not has_label:
             gaps.append(f"missing_label_{args.required_label}")
-        if not has_bet:
-            gaps.append("no_bet_linked_or_found")
 
     return {
         "command": "chain-check",
