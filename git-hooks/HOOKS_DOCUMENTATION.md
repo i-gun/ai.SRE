@@ -44,6 +44,14 @@ Add to project README or onboarding guide:
 bash git-hooks/install-hooks.sh
 ```
 
+### Option 4: Durable Setup via core.hooksPath (Recommended)
+
+Instead of copying hooks into the untracked `.git/hooks/` directory (which must be redone after every clone), point Git directly at the tracked folder — this must still be run once per clone/machine since Git config isn't versioned:
+
+```bash
+git config core.hooksPath git-hooks
+```
+
 ## What Each Hook Does
 
 ### Pre-Commit Hook: Advisor Update & Format
