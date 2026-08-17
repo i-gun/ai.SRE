@@ -140,6 +140,7 @@ class ServiceNowClient:
         "problem_id",
         "u_vendor_ticket",
         "vendor_ticket",
+        "sys_created_on",
         "sys_updated_on",
     ]
 
@@ -155,6 +156,7 @@ class ServiceNowClient:
         "cmdb_ci",
         "assignment_group",
         "problem_statement",
+        "sys_created_on",
         "sys_updated_on",
     ]
 
@@ -852,7 +854,8 @@ class ServiceNowClient:
             )
 
         problem_payload: Dict[str, Any] = {
-            # origin_task is a reference field; provide the incident sys_id for reliable linkage.
+            # Reference fields require the incident sys_id; ServiceNow renders
+            # the operator-visible Origin Task as the incident number.
             "origin_task": incident_sys_id,
             "category": "Application",
             "subcategory": "E-Commerce",

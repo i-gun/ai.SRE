@@ -9,11 +9,11 @@ import sys
 from typing import Any, Dict, List, Optional, Sequence
 
 from common import bootstrap
-from reuse_common import extract_ref, find_incident_candidates, find_problem_candidates
 
 bootstrap(override_env=True)
 
 from servicenow_client import ServiceNowClient, ServiceNowValidationError
+from reuse_common import extract_ref, find_incident_candidates, find_problem_candidates
 
 
 def _build_incident_description(
@@ -65,11 +65,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--event-time", default=None, help="Event timestamp")
     parser.add_argument("--caller-id", default=None, help="Required for --execute when creating a new incident")
     parser.add_argument("--assignment-group", default=None)
-    parser.add_argument("--category", default="Infrastructure")
-    parser.add_argument("--subcategory", default="Cloud Services")
+    parser.add_argument("--category", default="Application")
+    parser.add_argument("--subcategory", default="E-Commerce")
     parser.add_argument("--service-offering", default=None)
     parser.add_argument("--cmdb-ci", default=None)
-    parser.add_argument("--impact", default="2", help="ServiceNow impact value 1..3")
+    parser.add_argument("--impact", default="2", help="ServiceNow impact value 1..3 (P3 default)")
     parser.add_argument("--urgency-sn", default=None, help="ServiceNow urgency value (default: derived from tier)")
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--search-days", type=int, default=30,
@@ -89,6 +89,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
 
     client = ServiceNowClient.from_env()
+    configured_user = (client.config.username or "").strip()
+    if not configured_user:
+        raise ServiceNowValidationError("Configured ServiceNow user is required for secret incident assignment")
+
+    configuration_item = (args.cmdb_ci or "").strip() or "canadiantire.ca"
+    service_offering = (args.service_offering or "").strip() or configuration_item
+    assignment_group = (args.assignment_group or client.config.assignment_groups[0]).strip()
 
     # Standard incident short description template
     short_description = f"[Secret {args.urgency.capitalize()}] {args.secret} in {args.vault}"
@@ -102,20 +109,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         incident_result = find_incident_candidates(
             client,
             exact_short_description=short_description,
-            fallback_terms=[args.vault, args.secret],
+            fallback_terms=[args.secret, args.vault],
             limit=args.limit,
+            max_age_days=args.search_days,
         )
 
         existing_incident = incident_result.get("best")
         incident_number = extract_ref(existing_incident.get("number")) if existing_incident else None
+        linked_problem_number = (
+            extract_ref(existing_incident.get("problem_id"))
+            if existing_incident
+            else ""
+        )
 
         # Phase 2: Search for existing problems
         problem_result = find_problem_candidates(
             client,
             exact_short_description=short_description,
-            fallback_terms=[args.vault, args.secret],
-            linked_problem_number=None,
+            fallback_terms=[args.secret, args.vault],
+            linked_problem_number=linked_problem_number,
             limit=args.limit,
+            max_age_days=args.search_days,
         )
 
         existing_problem = problem_result.get("best")
@@ -123,6 +137,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         # Build output
         output = {
+            "mode": "execute" if args.execute else "dry-run",
             "short_description": short_description,
             "vault": args.vault,
             "secret": args.secret,
@@ -151,10 +166,108 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 ),
                 "category": args.category,
                 "subcategory": args.subcategory,
+                "assigned_to": configured_user,
+                "assignment_group": assignment_group,
+                "service_offering": service_offering,
+                "cmdb_ci": configuration_item,
                 "impact": args.impact,
-                "urgency": urgency_value,
+                "urgency": "2",
             } if not existing_incident else None,
+            "actions": [],
+            "created": {
+                "incident": None,
+                "problem": None,
+            },
         }
+
+        if existing_incident and existing_problem and not args.execute:
+            output["actions"].append("reused_incident_and_problem")
+        elif not args.execute:
+            if existing_incident:
+                output["actions"].append("would_create_problem_from_existing_incident")
+            else:
+                output["actions"].extend([
+                    "would_create_incident",
+                    "would_create_problem_from_new_incident",
+                ])
+        else:
+            if existing_incident:
+                existing_incident = client.update_incident_fields(
+                    sys_id=extract_ref(existing_incident.get("sys_id")),
+                    fields={
+                        "assigned_to": configured_user,
+                        "assignment_group": assignment_group,
+                        "category": args.category,
+                        "subcategory": args.subcategory,
+                        "service_offering": service_offering,
+                        "cmdb_ci": configuration_item,
+                    },
+                    require_active=True,
+                    forbid_resolved=True,
+                )
+                existing_incident = client.set_priority_by_matrix(
+                    sys_id=extract_ref(existing_incident.get("sys_id")),
+                    target_priority="P3",
+                    work_note="Normalized by expiring-secrets execute flow.",
+                )
+
+            if not existing_incident:
+                caller_id = (args.caller_id or "").strip()
+                if not caller_id:
+                    raise ServiceNowValidationError(
+                        "--caller-id is required when creating a new incident in --execute mode"
+                    )
+                existing_incident = client.create_incident(
+                    short_description=short_description,
+                    description=_build_incident_description(
+                        urgency=args.urgency,
+                        vault_name=args.vault,
+                        object_name=args.secret,
+                        days_remaining=args.days_remaining,
+                        event_type=args.event_type,
+                        event_time=args.event_time,
+                    ),
+                    caller_id=caller_id,
+                    assignment_group=assignment_group,
+                    category=args.category,
+                    subcategory=args.subcategory,
+                    assigned_to=configured_user,
+                    service_offering=service_offering,
+                    cmdb_ci=configuration_item,
+                    impact="2",
+                    urgency="2",
+                    work_note="Created by expiring-secrets execute flow.",
+                )
+                output["created"]["incident"] = {
+                    "number": extract_ref(existing_incident.get("number")),
+                    "sys_id": extract_ref(existing_incident.get("sys_id")),
+                }
+                output["actions"].append("created_incident")
+            else:
+                output["actions"].append("reused_incident")
+
+            if not existing_problem:
+                problem_bundle = client.create_problem_from_incident(
+                    incident_number=extract_ref(existing_incident.get("number")),
+                    problem_short_description=short_description,
+                    problem_description=_build_incident_description(
+                        urgency=args.urgency,
+                        vault_name=args.vault,
+                        object_name=args.secret,
+                        days_remaining=args.days_remaining,
+                        event_type=args.event_type,
+                        event_time=args.event_time,
+                    ),
+                    work_note="Linked Problem created by expiring-secrets execute flow.",
+                )
+                created_problem = problem_bundle.get("problem") or {}
+                output["created"]["problem"] = {
+                    "number": extract_ref(created_problem.get("number")),
+                    "sys_id": extract_ref(created_problem.get("sys_id")),
+                }
+                output["actions"].append("created_problem")
+            else:
+                output["actions"].append("reused_problem")
 
         if args.json:
             print(json.dumps(output, indent=2))

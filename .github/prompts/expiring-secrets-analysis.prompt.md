@@ -68,17 +68,22 @@ Do not wait for one to complete before starting the others.
 For each (vaultName, objectName, urgency) in impact_matrix, run the promoted chain-check script:
 
   python scripts/jira/secrets_task_manager.py chain-check \
-    --vault "{vaultName}" --secret "{objectName}" --urgency {urgency} --json
+    --vault "{vaultName}" --secret "{objectName}" --urgency {urgency} \
+    --search-days 30 --json
+
+The chain-check applies `created >= -30d` to every DDL and BET tier. Only Jira
+issues created within the last 30 days are eligible for reuse; an old issue that
+was recently updated must not be selected for this recent-expiration flow.
 
 The script executes all 5 JQL tiers internally and returns chain_status:
-  complete  — DDL found with correct parent (DDL-28477), Secrets label, and linked BET
-  partial   — DDL found but one or more of: parent, label, BET link is missing
+  complete  — DDL found with AzureKV label and linked BET
+  partial   — DDL found without the required label or BET, or a recent BET exists without its corresponding DDL
   no_chain  — no DDL or BET found on any tier
 
 Return per tuple:
 - vaultName, objectName, urgency
 - chain_status: complete | partial | no_chain
-- best_ddl_key, ddl_parent, ddl_has_secrets_label, ddl_status
+- best_ddl_key, ddl_has_azurekv_label, ddl_status
 - best_bet_key, bet_status
 - gaps[]
 
@@ -88,16 +93,23 @@ For each (vaultName, objectName, urgency) in impact_matrix, search for existing 
 This is a search/preview step only — do not call any script in --execute mode here.
 
 Incident search logic:
-- Search window: 30 days back for moderate/urgent; 7 days back for critical
+- Search window: 30 days back for every urgency tier
+- Filter by incident creation time (`sys_created_on`); records older than 30 days
+  are not eligible even when they are still open or were recently updated
 - Query by exact short_description: "[Secret {urgency}] {objectName} in {vaultName}"
 - Fallback: search by vaultName alone
 - Fallback: search by objectName alone
 - Scope to designated SN assignment groups
 
 Problem search logic:
-- Same search windows and fallback logic as incidents
+- Same 30-day creation window and fallback logic as incidents
+- Filter by problem creation time (`sys_created_on`); records older than 30 days
+  are not eligible even when they are still open or were recently updated
 - Scope to designated assignment groups
-- Check if linked to the incident (if found)
+- When an incident is found, inspect its linked `problem_id` first and apply the
+  same 30-day creation filter; never reuse an older linked problem
+- Use vault/object-name fallback matches only when they are also within the same
+  30-day creation window
 
 Return per tuple:
 - vaultName, objectName, urgency
@@ -128,7 +140,7 @@ Classify each tuple into one of:
 
   repair_needed
     chain_status = partial (DDL exists but gaps present)
-    Action: describe what repairs would be made (add label, fix parent, link BET) — decision only.
+    Action: describe what repairs would be made (add label, link BET) — decision only.
 
   needs_full_creation
     chain_status = no_chain
@@ -177,7 +189,6 @@ Sections:
 Success criteria:
 - Every discovered (vaultName, objectName) with expiration represented in resolution_matrix
 - Every tuple has exactly one resolved classification
-- Every hypothetical DDL has parent DDL-28477 noted in its row
 - Secrets with recent NEW_VERSION_CREATED events excluded from output (suppressed)
 - resolution_matrix artifact passes `resolution_matrix.py validate`
 - No script was invoked with --execute anywhere in this flow

@@ -93,20 +93,45 @@ ServiceNow (reuse-before-create, using the promoted script in --execute mode):
   - The script performs its own reuse search; if it exposes an approval-gate flag similar to
     the CVE script, treat a required-but-unconfirmed gate as a secondary hard stop requiring a
     fresh manual check before retrying — do not blindly pass any confirmation flag.
-  - category = Infrastructure, subcategory = Cloud Services, impact = 2 (Medium),
-    urgency (SN) derived from tier: critical->1, urgent->2, moderate->3
+  - assign the incident to the currently configured ServiceNow user
+  - set or update Assignment group to the currently configured/default designated group
+  - category = Application, subcategory = E-Commerce
+  - service_offering = cmdb_ci when a configuration item is supplied; otherwise
+    set both to `canadiantire.ca`
+  - set Incident priority to P3 through the existing impact/urgency matrix
+    (impact=2, urgency=2)
+  - set Problem Origin Task to the Incident number
   - Use the standard description template (Azure Key Vault Secret Expiration Alert block)
     from the analysis flow's carried-forward row fields.
 
 Jira DDL/BET (only for rows needing DDL/BET creation or repair):
-  DDL: project = DDL, parent = DDL-28477, labels = [Secrets, {urgency}, ODP, SRE, key-vault-operations],
-    banner = CanadianTire (required), components = [Key Vault Operations],
-    team = Site Reliability Engineering, rootCause = Configuration,
+  DDL: project = DDL, issue type = Problem,
+    labels = [L2toL3, ODP, SRE, AzureKV], banner = [CanadianTire, SportChek],
+    components = [Azure], team = Site Reliability Engineering,
+    rootCause = Lifecycle Management, priority = Major,
+    ServiceNow Priority = P3 (selectable option),
     description must exactly match the ServiceNow Incident description for the same tuple
-  BET: project = BET, summary = [Secret {urgency}] {objectName} in {vaultName},
-    assignee = DaaS team, labels = [Secrets, {urgency}, DaaS, ODP], cross-link DDL <-> BET (relates-to)
+  On successful DDL creation, clone its summary and description into BET as a Task,
+  assign team [Daas] Operational Squad, add label DaaS, and cross-link DDL <-> BET
+  (relates-to).
 
-  For repair_needed rows, apply only the delta (add missing label, fix parent, link BET,
+Use the promoted Secrets handoff for this operation:
+
+  python scripts/jira/create_secrets_ddl_bet.py \
+    --incident-number "{incident_number}" --problem-number "{problem_number}" \
+    --summary "[Secret {urgency}] {objectName} in {vaultName}" \
+    --description "{service_now_incident_description}" --idempotency-days 30
+
+The handoff is idempotent, creates the DDL `Problem` first, applies the required
+fields, resolves current/upcoming versions from the Confluence Digital Release
+Calendar, writes Affected version and Fix Versions to both DDL and BET, writes
+the resulting DDL key to the ServiceNow Incident Vendor Ticket field, then creates
+the BET `Task` clone and links the two Jira issues. After the
+chain is verified, resolve the Incident with State = Resolved, Resolution code =
+Fixed, and Resolution notes: `Secret rotation task has been assigned to Operational
+Squad. {BET_ticket_number} is for tracking.`
+
+  For repair_needed rows, apply only the delta (add missing label, link BET,
   create BET and link to existing DDL) — do not recreate existing records.
 
 Record every created/reused ID immediately in the execution report as each write completes

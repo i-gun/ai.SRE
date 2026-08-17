@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reusable Jira secrets task utilities (chain-check for DDL→parent/label/BET)."""
+"""Reusable Jira secrets task utilities (chain-check for DDL label/BET)."""
 
 from __future__ import annotations
 
@@ -26,15 +26,16 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
     chain = subparsers.add_parser(
         "chain-check",
-        help="Validate DDL→parent/label/BET chain for a vault+secret pair (5-tier JQL)",
+        help="Validate DDL label/BET chain for a vault+secret pair (5-tier JQL)",
     )
     chain.add_argument("--vault", required=True, help="Key Vault name, e.g. 'digital-prd-mer-cc-01-k'")
     chain.add_argument("--secret", required=True, help="Secret object name, e.g. 'corp-prod-095-dms-spn-client-secret'")
     chain.add_argument("--urgency", required=True, choices=["moderate", "urgent", "critical"],
                       help="Urgency tier")
-    chain.add_argument("--ddl-parent", default="DDL-28477", help="Expected DDL parent key (default: DDL-28477)")
-    chain.add_argument("--required-label", default="Secrets", help="Required DDL label (default: Secrets)")
+    chain.add_argument("--required-label", default="AzureKV", help="Required DDL label (default: AzureKV)")
     chain.add_argument("--limit", type=int, default=5, help="Max results per JQL tier (default: 5)")
+    chain.add_argument("--search-days", type=int, default=30,
+                       help="Only include Jira issues created within this many days (default: 30)")
     chain.add_argument("--json", action="store_true", help="Output JSON format")
 
     return parser.parse_args(argv)
@@ -42,42 +43,45 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 def run_chain_check(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) -> Dict[str, Any]:
     """Run 5-tier JQL chain check for vault+secret pair."""
+    if args.search_days <= 0:
+        raise ValueError("search-days must be greater than zero")
     vault_safe = args.vault.replace('"', '\\"')
     secret_safe = args.secret.replace('"', '\\"')
+    recent_clause = f"created >= -{args.search_days}d"
 
     tiers = [
         {
             "name": "Exact DDL match",
             "jql": (
-                f'project = DDL AND summary ~ "{secret_safe}" AND summary ~ "{vault_safe}" '
+                f'project = DDL AND {recent_clause} AND summary ~ "{secret_safe}" AND summary ~ "{vault_safe}" '
                 f'AND labels = "{args.required_label}" ORDER BY updated DESC'
             ),
         },
         {
             "name": "DDL by secret name",
             "jql": (
-                f'project = DDL AND summary ~ "{secret_safe}" '
+                f'project = DDL AND {recent_clause} AND summary ~ "{secret_safe}" '
                 f'AND labels = "{args.required_label}" ORDER BY updated DESC'
             ),
         },
         {
             "name": "DDL by vault name",
             "jql": (
-                f'project = DDL AND summary ~ "{vault_safe}" '
+                f'project = DDL AND {recent_clause} AND summary ~ "{vault_safe}" '
                 f'AND labels = "{args.required_label}" ORDER BY updated DESC'
             ),
         },
         {
             "name": "BET by secret name",
             "jql": (
-                f'project = BET AND summary ~ "{secret_safe}" AND summary ~ "{vault_safe}" '
+                f'project = BET AND {recent_clause} AND summary ~ "{secret_safe}" AND summary ~ "{vault_safe}" '
                 f'ORDER BY updated DESC'
             ),
         },
         {
             "name": "BET by vault name",
             "jql": (
-                f'project = BET AND summary ~ "{vault_safe}" '
+                f'project = BET AND {recent_clause} AND summary ~ "{vault_safe}" '
                 f'ORDER BY updated DESC'
             ),
         },
@@ -88,21 +92,19 @@ def run_chain_check(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) ->
     eval_result = evaluate_chain(
         ddl_candidates=candidates["ddl"],
         bet_candidates=candidates["bet"],
-        ddl_parent=args.ddl_parent,
         required_label=args.required_label,
     )
 
     best_ddl = eval_result["best_ddl"]
     best_bet = eval_result["best_bet"]
-    ddl_has_parent = eval_result["has_parent"]
     ddl_has_label = eval_result["has_label"]
     chain_status = eval_result["chain_status"]
     has_bet = eval_result["has_bet"]
 
     gaps = []
+    if best_bet and not best_ddl:
+        gaps.append("No corresponding DDL issue found for the recent BET issue")
     if best_ddl:
-        if not ddl_has_parent:
-            gaps.append(f"DDL parent should be {args.ddl_parent}")
         if not ddl_has_label:
             gaps.append(f"DDL missing required label '{args.required_label}'")
         if not has_bet:
@@ -116,7 +118,6 @@ def run_chain_check(args: argparse.Namespace, host: str, auth: HTTPBasicAuth) ->
         "chain_status": chain_status,
         "best_ddl": best_ddl,
         "best_bet": best_bet,
-        "ddl_parent_ok": ddl_has_parent,
         "ddl_label_ok": ddl_has_label,
         "gaps": gaps,
         "tier_results": tier_results,
@@ -139,7 +140,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"Status: {result['chain_status'].upper()}")
                 if result.get("best_ddl"):
                     print(f"  DDL: {result['best_ddl']['key']} - {result['best_ddl']['summary']}")
-                    print(f"    Parent OK: {result['ddl_parent_ok']} (expected: {args.ddl_parent})")
                     print(f"    Label OK: {result['ddl_label_ok']} (required: {args.required_label})")
                 if result.get("best_bet"):
                     print(f"  BET: {result['best_bet']['key']} - {result['best_bet']['summary']}")

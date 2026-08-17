@@ -88,14 +88,14 @@ For each (vaultName, objectName, urgency) in impact_matrix, run the promoted cha
     --vault "{vaultName}" --secret "{objectName}" --urgency {urgency} --json
 
 The script executes all 5 JQL tiers internally and returns chain_status:
-  complete  — DDL found with correct parent (DDL-28477), Secrets label, and linked BET
-  partial   — DDL found but one or more of: parent, label, BET link is missing
+  complete  — DDL found with AzureKV label and linked BET
+  partial   — DDL found but one or more of: label or BET link is missing
   no_chain  — no DDL or BET found on any tier
 
 Return per tuple:
 - vaultName, objectName, urgency
 - chain_status: complete | partial | no_chain
-- best_ddl_key, ddl_parent, ddl_has_secrets_label, ddl_status
+- best_ddl_key, ddl_has_secrets_label, ddl_status
 - best_bet_key, bet_status
 - gaps[]
 
@@ -144,7 +144,7 @@ Classify each tuple into one of:
 
   repair_needed
     chain_status = partial (DDL exists but gaps present)
-    Action (dry-run): describe what repairs would be made (add label, fix parent, link BET).
+    Action (dry-run): describe what repairs would be made (add label, link BET).
     ServiceNow: reuse existing INC/PRB if found; otherwise flag for creation.
 
   needs_full_creation
@@ -204,7 +204,7 @@ Incident/Problem Description Template:
   ────────────────────────────────────────────
 
 Jira DDL:
-  project = DDL, parent = DDL-28477
+  project = DDL
   summary = short_description from ServiceNow context for the tuple
   labels  = [Secrets, {urgency}, ODP, SRE, key-vault-operations]
   banner (selectable) = CanadianTire (required)
@@ -226,7 +226,6 @@ Jira BET:
 
 For repair_needed tuples, describe only the delta:
   - "add label 'Secrets' to DDL-XXXXX"
-  - "update parent of DDL-XXXXX to DDL-28477"
   - "create BET-XXXXX and link to DDL-XXXXX"
 
 Approval Gate:
@@ -251,7 +250,6 @@ Success criteria:
 - Every discovered (vaultName, objectName) with expiration represented in resolution_matrix
 - Every tuple has exactly one resolved path (report_only | repair_needed | needs_full_creation)
 - No duplicate artifact creation when reusable ones exist
-- Every hypothetical DDL has parent DDL-28477
 - Every hypothetical DDL has label "Secrets"
 - Every artifact uses the exact summary template: [Secret {urgency}] {objectName} in {vaultName}
 - Jira DDL/BET description must exactly match ServiceNow Incident description for the same tuple
