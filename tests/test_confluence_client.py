@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -12,7 +14,11 @@ CLIENT_PATH = PROJECT_ROOT / ".github" / "skills" / "confluence-knowledge-operat
 if str(CLIENT_PATH) not in sys.path:
     sys.path.insert(0, str(CLIENT_PATH))
 
-from confluence_client import ConfluenceClient, ConfluenceConfig  # noqa: E402
+from confluence_client import (  # noqa: E402
+    ConfluenceClient,
+    ConfluenceConfig,
+    ConfluenceValidationError,
+)
 
 
 class ConfluenceClientExtractionTests(unittest.TestCase):
@@ -145,6 +151,50 @@ class ConfluenceClientExtractionTests(unittest.TestCase):
             space_keys=["PLATFORM", "DEV", "OPS"],
         )
         self.assertEqual(config.space_keys, ["PLATFORM", "DEV", "OPS"])
+
+    def test_resolve_release_calendar_uses_production_date_boundary(self) -> None:
+        page = {
+            "version": {"number": 316},
+            "body": {
+                "storage": {
+                    "value": (
+                        "<h2>2026 Upcoming Release Schedule</h2>"
+                        "<table><tr><th>Production Release date</th><th>Release Name</th></tr>"
+                        "<tr><td><time datetime=\"2026-08-11\" /></td><td>RC-26.10</td></tr>"
+                        "<tr><td><time datetime=\"2026-08-25\" /><time datetime=\"2026-08-26\" /></td>"
+                        "<td>RC-26.11</td></tr>"
+                        "<tr><td><time datetime=\"2026-09-14\" /></td><td>RC-26.12</td></tr>"
+                        "</table>"
+                    )
+                }
+            },
+        }
+        with patch.object(self.client, "get_page", return_value=page):
+            result = self.client.resolve_release_calendar(
+                page_id="80217385",
+                as_of=date(2026, 8, 18),
+            )
+
+        self.assertEqual(result["current_release_version"], "RC-26.10")
+        self.assertEqual(result["future_release_version"], "RC-26.11")
+        self.assertEqual(result["current_production_date"], "2026-08-11")
+        self.assertEqual(result["future_production_date"], "2026-08-25")
+        self.assertEqual(result["source_page_version"], 316)
+
+    def test_resolve_release_calendar_rejects_missing_production_column(self) -> None:
+        page = {
+            "body": {
+                "storage": {
+                    "value": (
+                        "<h2>2026 Upcoming Release Schedule</h2>"
+                        "<table><tr><th>Release Name</th></tr><tr><td>RC-26.11</td></tr></table>"
+                    )
+                }
+            }
+        }
+        with patch.object(self.client, "get_page", return_value=page):
+            with self.assertRaises(ConfluenceValidationError):
+                self.client.resolve_release_calendar(page_id="80217385", as_of=date(2026, 8, 18))
 
 
 if __name__ == "__main__":

@@ -67,6 +67,7 @@ class JiraClient:
     ISSUE_SEARCH_PATH = "/rest/api/3/search"
     ISSUE_PATH = "/rest/api/3/issue"
     CREATE_META_PATH = "/rest/api/3/issue/createmeta"
+    FIELD_CATALOG_PATH = "/rest/api/3/field"
     PROJECT_STATUSES_PATH_TEMPLATE = "/rest/api/3/project/{project_key}/statuses"
     ISSUE_SEARCH_JQL_PATH = "/rest/api/3/search/jql"
     TEAM_FIELD_ID = "customfield_11002"
@@ -523,6 +524,13 @@ class JiraClient:
     # ------------------------------------------------------------------
     # Field metadata (no probe issue required)
     # ------------------------------------------------------------------
+
+    def list_fields(self) -> List[Dict[str, Any]]:
+        """Return the global Jira field catalog visible to the configured identity."""
+        payload = self._request("GET", self.FIELD_CATALOG_PATH)
+        if not isinstance(payload, list):
+            raise JiraAPIError("Jira field catalog returned an unexpected response shape.")
+        return [field for field in payload if isinstance(field, dict)]
 
     def get_create_meta(self, *, project_key: str, issue_type: str) -> Dict[str, Any]:
         """Return field metadata for issue creation using the createmeta API.

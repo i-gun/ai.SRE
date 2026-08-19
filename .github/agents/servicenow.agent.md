@@ -58,6 +58,11 @@ Credential handling rules:
 3. Redact auth-related errors in user-facing outputs
 4. Fail fast if mandatory variables are missing
 
+## Local Field Catalog Preference
+- When ServiceNow field lookup, field-name resolution, reference-field lookup, or create/update payload mapping requires field metadata, first consult `data/servicenow_table_fields_20260819T095957Z.json`.
+- Use live ServiceNow metadata endpoints only when the local catalog is missing, stale for the requested table, or lacks the required field detail.
+- In responses, state when the local catalog was used and call out any fallback to live metadata.
+
 ## Scripting & Automation Policy
 - Prefer existing promoted tooling, shared functions, and approved libraries before creating new automation.
 - If a new artifact is necessary, extend the smallest existing one or create a promotion-ready artifact with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.

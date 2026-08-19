@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from common import bootstrap
@@ -28,12 +30,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--until", default="1 day ago")
     parser.add_argument("--severities", default="CRITICAL,HIGH")
     parser.add_argument("--newrelic-url", default=None)
-    parser.add_argument("--caller-id", default=None, help="Required for --execute when creating a new incident")
+    parser.add_argument("--analysis-artifact", default=None, help="Resolution matrix artifact supplying validated CVE evidence")
+    parser.add_argument("--caller-id", default=None, help="ServiceNow caller; defaults to SERVICENOW_USERNAME")
+    parser.add_argument("--assigned-to", default=None, help="ServiceNow assignee; defaults to SERVICENOW_USERNAME")
+    parser.add_argument("--contact", default="teams")
     parser.add_argument("--assignment-group", default=None)
     parser.add_argument("--category", default="Application")
     parser.add_argument("--subcategory", default="E-Commerce")
-    parser.add_argument("--service-offering", default=None)
-    parser.add_argument("--cmdb-ci", default=None)
+    parser.add_argument("--service-offering", default="Digital - New Relic Alerts - ODP")
+    parser.add_argument("--cmdb-ci", default=None, help="Defaults to --service-offering")
+    parser.add_argument("--vendor-ticket", default=None, help="Jira DDL key stored as ServiceNow u_vendor_ticket")
     parser.add_argument("--impact", default="2", help="ServiceNow impact value 1..3")
     parser.add_argument("--urgency", default="2", help="ServiceNow urgency value 1..3")
     parser.add_argument("--limit", type=int, default=20)
@@ -48,6 +54,32 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Apply writes in ServiceNow. Without this flag, script is dry-run only.",
     )
     return parser.parse_args(argv)
+
+
+def _load_analysis_evidence(path: Optional[str], *, kind: str, cve: str) -> Optional[Dict[str, Any]]:
+    if not path:
+        return None
+    artifact = json.loads(Path(path).read_text(encoding="utf-8"))
+    for row in artifact.get("rows", []):
+        key = row.get("entity_key") or {}
+        if str(key.get("kind", "")).lower() == kind.lower() and str(key.get("cve_id", "")).lower() == cve.lower():
+            return {
+                "grouped_match": {
+                    "severity": row.get("severity") or "HIGH",
+                    "title": [row["title"]] if row.get("title") else [],
+                    "disclosureUrl": row.get("disclosureUrl") or [],
+                },
+                "detail_rows": [
+                    {
+                        "facet": service,
+                        "package": "; ".join(row.get("package") or []),
+                        "packageVersion": "; ".join(row.get("packageVersion") or []),
+                        "remediationUpgradeAction": "; ".join(row.get("remediationUpgradeAction") or []),
+                    }
+                    for service in row.get("affected_services") or []
+                ],
+            }
+    raise ServiceNowValidationError(f"No matching {kind}/{cve} row found in analysis artifact: {path}")
 
 
 def _record_stub(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -97,6 +129,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
 
     severities = [s.strip().upper() for s in args.severities.split(",") if s.strip()]
+    evidence = _load_analysis_evidence(
+        args.analysis_artifact,
+        kind=args.kind.strip(),
+        cve=args.cve.strip(),
+    )
     preview = build_payload_preview(
         account_id=args.account_id,
         cve=args.cve.strip(),
@@ -105,6 +142,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         until=args.until,
         severities=severities,
         newrelic_url=args.newrelic_url,
+        evidence=evidence,
     )
 
     incident_payload = preview["servicenow"]["incident"]
@@ -193,9 +231,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
 
     if not best_incident:
-        caller_id = (args.caller_id or "").strip()
+        caller_id = (args.caller_id or os.getenv("SERVICENOW_USERNAME", "")).strip()
         if not caller_id:
             raise ServiceNowValidationError("--caller-id is required when creating a new incident in --execute mode")
+
+        service_offering = (args.service_offering or "Digital - New Relic Alerts - ODP").strip()
+        cmdb_ci = (args.cmdb_ci or service_offering).strip()
+        assigned_to = (args.assigned_to or os.getenv("SERVICENOW_USERNAME", "")).strip()
 
         created_incident = client.create_incident(
             short_description=short_description,
@@ -204,8 +246,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             assignment_group=args.assignment_group,
             category=args.category,
             subcategory=args.subcategory,
-            service_offering=args.service_offering,
-            cmdb_ci=args.cmdb_ci,
+            assigned_to=assigned_to,
+            service_offering=service_offering,
+            cmdb_ci=cmdb_ci,
+            contact=args.contact,
+            contact_type="Self-service",
+            vendor_ticket=args.vendor_ticket,
             impact=args.impact,
             urgency=args.urgency,
             work_note="Created by CVE create/reuse flow (execute mode).",

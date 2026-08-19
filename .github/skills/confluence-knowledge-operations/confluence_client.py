@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from html import unescape
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -225,6 +226,93 @@ class ConfluenceClient:
         if not normalized:
             raise ConfluenceValidationError("CQL is required for content search.")
         return normalized
+
+    def resolve_release_calendar(
+        self,
+        *,
+        page_id: str,
+        as_of: Optional[date] = None,
+        schedule_heading: str = "2026 Upcoming Release Schedule",
+    ) -> Dict[str, Any]:
+        """Resolve current and future releases from production deployment dates."""
+        page = self.get_page(page_id=page_id)
+        body = ((page.get("body") or {}).get("storage") or {}).get("value") or ""
+        heading_pattern = re.compile(
+            rf"<h[1-6][^>]*>.*?{re.escape(schedule_heading)}.*?</h[1-6]>",
+            re.IGNORECASE | re.DOTALL,
+        )
+        heading_match = heading_pattern.search(body)
+        if not heading_match:
+            raise ConfluenceValidationError(
+                f"Release calendar heading not found: {schedule_heading}"
+            )
+        section = body[heading_match.end():]
+        next_heading = re.search(r"<h[1-6][^>]*>", section, re.IGNORECASE)
+        if next_heading:
+            section = section[:next_heading.start()]
+        table_match = re.search(r"<table\b.*?</table>", section, re.IGNORECASE | re.DOTALL)
+        if not table_match:
+            raise ConfluenceValidationError("Release calendar schedule table not found")
+
+        rows = re.findall(r"<tr\b.*?</tr>", table_match.group(0), re.IGNORECASE | re.DOTALL)
+        if len(rows) < 2:
+            raise ConfluenceValidationError("Release calendar schedule has no release rows")
+
+        def cells(row_html: str) -> List[str]:
+            return re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", row_html, re.IGNORECASE | re.DOTALL)
+
+        def text(cell_html: str) -> str:
+            return unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", cell_html))).strip()
+
+        headers = [text(cell).lower() for cell in cells(rows[0])]
+        try:
+            production_index = headers.index("production release date")
+            release_index = headers.index("release name")
+        except ValueError as exc:
+            raise ConfluenceValidationError(
+                "Release calendar requires Production Release date and Release Name columns"
+            ) from exc
+
+        candidates: List[Tuple[date, str]] = []
+        for row_html in rows[1:]:
+            row_cells = cells(row_html)
+            if len(row_cells) <= max(production_index, release_index):
+                continue
+            release_name = text(row_cells[release_index]).upper()
+            if not release_name:
+                continue
+            production_dates = re.findall(
+                r'<time[^>]+datetime="(\d{4}-\d{2}-\d{2})"',
+                row_cells[production_index],
+                re.IGNORECASE,
+            )
+            for raw_date in production_dates:
+                try:
+                    candidates.append((date.fromisoformat(raw_date), release_name))
+                except ValueError:
+                    continue
+        if not candidates:
+            raise ConfluenceValidationError("No production release dates found in release calendar")
+
+        effective_date = as_of or date.today()
+        past = [(release_date, release) for release_date, release in candidates if release_date <= effective_date]
+        future = [(release_date, release) for release_date, release in candidates if release_date > effective_date]
+        if not past or not future:
+            raise ConfluenceValidationError(
+                "Release calendar did not provide both a deployed current release and a future release"
+            )
+        current_date, current_release = max(past, key=lambda item: item[0])
+        future_date, future_release = min(future, key=lambda item: item[0])
+        return {
+            "current_release_version": current_release,
+            "future_release_version": future_release,
+            "selection_policy": "production_deployment_dates",
+            "as_of": effective_date.isoformat(),
+            "source_page_id": self._normalize_page_id(page_id),
+            "source_page_version": (page.get("version") or {}).get("number"),
+            "current_production_date": current_date.isoformat(),
+            "future_production_date": future_date.isoformat(),
+        }
 
     def list_space_pages(
         self,

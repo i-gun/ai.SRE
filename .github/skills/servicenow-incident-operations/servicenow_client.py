@@ -593,6 +593,7 @@ class ServiceNowClient:
         cmdb_ci: Optional[str] = None,
         contact: Optional[str] = None,
         contact_type: Optional[str] = None,
+        vendor_ticket: Optional[str] = None,
         impact: str = "3",
         urgency: str = "3",
         work_note: Optional[str] = None,
@@ -640,6 +641,8 @@ class ServiceNowClient:
             payload["u_contact"] = contact.strip()
         if contact_type and contact_type.strip():
             payload["contact_type"] = contact_type.strip()
+        if vendor_ticket and vendor_ticket.strip():
+            payload["u_vendor_ticket"] = vendor_ticket.strip()
         if work_note and work_note.strip():
             payload["work_notes"] = work_note.strip()
 

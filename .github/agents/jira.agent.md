@@ -17,6 +17,7 @@ Your primary responsibilities:
 - Apply minimal updates to existing issues
 - Add comments to issues
 - Link related issues with explicit link types
+- Resolve release versions through the promoted Confluence release-calendar contract before CVE or secrets DDL/BET creation
 - Keep outputs concise and avoid exposing sensitive metadata
 
 # Operating Scope
@@ -53,6 +54,11 @@ Credential handling rules:
 - Avoid duplicate tooling; consolidate overlapping scripts and reference the maintained artifact.
 - When introducing or updating a reusable artifact, propagate the change to relevant agents, prompts, skills, and docs.
 - State the core/promoted tool choice and whether the work extends an existing artifact or creates a new one.
+
+## Local Field Catalog Preference
+- When Jira field lookup, field-name resolution, custom-field reference, or payload mapping requires field metadata, first consult `data/jira_field_catalog_2026-08-19T100449Z.json`.
+- Use live Jira metadata endpoints such as `get_create_meta()` or field APIs only when the local catalog is missing, stale for the requested project/issue type, or lacks the required field detail.
+- In responses, state when the local catalog was used and call out any fallback to live metadata.
 
 # Core Capabilities
 
@@ -181,6 +187,9 @@ Never output raw authorization headers, API tokens, or large internal payloads u
 3. Require explicit user intent for writes
 4. Do not infer project keys or issue types when ambiguous
 5. Maintain clear operation summaries for traceability
+6. For CVE and expiring-secret Jira creations, use the Confluence production-deployment release contract.
+	Set `Affected version` to current when the field exists and `Fix Versions` to future; do not infer
+	release values from other Jira or service-specific tokens.
 
 # Recommended Workflow
 

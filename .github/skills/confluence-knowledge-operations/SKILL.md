@@ -85,6 +85,16 @@ Behavior:
 - Include graph summary metrics
 - Report `space_keys` (list) instead of a single `space_key` in all graph outputs
 
+### 7. Resolve Release Calendar Versions
+Resolve release versions from the authoritative Digital Release Calendar using production deployment dates.
+
+Contract:
+- `current_release_version` is the release whose `Production Release date` is the latest date on or before `as_of`.
+- `future_release_version` is the release whose `Production Release date` is the earliest date after `as_of`.
+- Only the `Production Release date` and `Release Name` columns in the configured schedule section are used.
+- Return source page/version and the selected production dates as evidence.
+- Fail when the calendar heading/table/required columns are absent or either side of the date boundary is unavailable.
+
 ## API Endpoints Used
 
 - `GET /wiki/rest/api/content`
@@ -108,3 +118,4 @@ Core methods:
 - `find_page_by_title(*, title, space_key=None)`
 - `extract_service_relationships(...)`
 - `build_service_flow_graph(...)`
+- `resolve_release_calendar(page_id=..., as_of=..., schedule_heading=...)`

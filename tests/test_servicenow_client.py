@@ -339,6 +339,7 @@ class TestCreateIncidentValidation(unittest.TestCase):
                 cmdb_ci="Digital - Alerts",
                 contact="teams",
                 contact_type="Self-service",
+                vendor_ticket="DDL-40686",
             )
 
         payload = mock_request.call_args.kwargs["json"]
@@ -347,6 +348,7 @@ class TestCreateIncidentValidation(unittest.TestCase):
         self.assertEqual(payload["cmdb_ci"], "Digital - Alerts")
         self.assertEqual(payload["u_contact"], "teams")
         self.assertEqual(payload["contact_type"], "Self-service")
+        self.assertEqual(payload["u_vendor_ticket"], "DDL-40686")
 
 
 # ---------------------------------------------------------------------------

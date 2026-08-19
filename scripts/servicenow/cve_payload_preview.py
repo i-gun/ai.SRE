@@ -96,31 +96,38 @@ def build_payload_preview(
     until: str,
     severities: Sequence[str],
     newrelic_url: str | None = None,
+    evidence: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     _bootstrap()
 
-    from newrelic_client import NewRelicClient  # pylint: disable=import-error
-
     normalized_severities = [str(s).strip().upper() for s in severities if str(s).strip()]
-    client = NewRelicClient.from_env()
+    if evidence is None:
+        from newrelic_client import NewRelicClient  # pylint: disable=import-error
 
-    grouped_rows = client.run_nrql(
-        account_id=account_id,
-        nrql=_build_grouped_nrql(severities=normalized_severities, since=since, until=until),
-    )
-    detail_rows = client.run_nrql(
-        account_id=account_id,
-        nrql=_build_detail_nrql(cve_id=cve, severities=normalized_severities, since=since, until=until),
-    )
+        client = NewRelicClient.from_env()
+        grouped_rows = client.run_nrql(
+            account_id=account_id,
+            nrql=_build_grouped_nrql(severities=normalized_severities, since=since, until=until),
+        )
+        detail_rows = client.run_nrql(
+            account_id=account_id,
+            nrql=_build_detail_nrql(cve_id=cve, severities=normalized_severities, since=since, until=until),
+        )
+    else:
+        grouped_rows = [evidence.get("grouped_match") or {}]
+        detail_rows = evidence.get("detail_rows") or []
 
     grouped_match = None
-    for row in grouped_rows:
-        facet = row.get("facet") or []
-        if not isinstance(facet, list) or len(facet) < 2:
-            continue
-        if str(facet[0]) == cve and str(facet[1]) == kind:
-            grouped_match = row
-            break
+    if evidence is not None:
+        grouped_match = grouped_rows[0] if grouped_rows else None
+    else:
+        for row in grouped_rows:
+            facet = row.get("facet") or []
+            if not isinstance(facet, list) or len(facet) < 2:
+                continue
+            if str(facet[0]) == cve and str(facet[1]) == kind:
+                grouped_match = row
+                break
 
     if grouped_match is None:
         grouped_match = {

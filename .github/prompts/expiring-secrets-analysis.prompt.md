@@ -18,7 +18,7 @@ Reuse-first policy:
 
 ```text
 Execution model: 4 phases. Phases 1 and 3-4 are serial. Phase 2 dispatches @NewRelic, @ServiceNow,
-and @Jira simultaneously — do not wait for one before starting the others.
+@Jira, and @Confluence simultaneously — do not wait for one before starting the others.
 
 Read credentials only from .env. Prefer promoted core scripts over ad-hoc queries.
 This flow is read-only by construction: do not create, raise, or mutate any incidents,
@@ -57,6 +57,14 @@ Output (impact_matrix) — required as input to Phase 2:
     urgency (moderate|urgent|critical), objectName, vaultName, daysUntilExpiry, eventType,
     expiryTime, lastModified, hasNewVersionEvent (boolean)
 - total_secrets_at_risk, secrets_by_urgency{}
+
+**STOP CONDITION — NO EXPIRING SECRETS:** If `total_secrets_at_risk = 0` or
+`grouped_secrets[]` is empty after Phase 1, report that no expiring secrets were found
+for the requested business unit and window. Stop the flow immediately. Do not dispatch
+@Jira, @ServiceNow, or @Confluence; do not run incident, problem, issue, chain, or
+release-calendar lookups; do not persist a resolution matrix; and do not perform any
+writes. The final report must state that no further lookups or release version
+retrieval were necessary.
 
 ━━━ PHASE 2 — Chain Discovery and Incident Lookup [parallel] ━━━
 
@@ -129,6 +137,16 @@ never pass --execute) to validate and preview incident/problem payloads:
     --vault "{vaultName}" --secret "{objectName}" --urgency {urgency} \
     --days-remaining {daysUntilExpiry} --event-type {eventType} --json
 
+  ── @Confluence (runs in parallel with @Jira and @ServiceNow) ──
+
+  Resolve the authoritative Digital Release Calendar page `80217385` through the promoted
+  Confluence release-calendar contract. Use only `Production Release date` and `Release Name`:
+  - `current_release_version`: latest production deployment date on or before the analysis date
+  - `future_release_version`: nearest production deployment date after the analysis date
+
+  Return `current_release_version`, `future_release_version`, `source_page_id`,
+  `source_page_version`, `current_production_date`, and `future_production_date` once per run.
+
 ━━━ PHASE 3 — Synthesis and Classification [serial, after both Phase 2 tasks complete] ━━━
 
 Merge the Jira chain_results and ServiceNow sn_results per (vaultName, objectName, urgency).
@@ -151,7 +169,8 @@ Output — resolution_matrix rows, one per (vaultName, objectName, urgency):
 - classification: report_only | repair_needed | needs_full_creation
 - existing: { ddl_key, bet_key, incident_number, problem_number }
 - gaps[]
-- carry forward daysUntilExpiry, eventType, expiryTime, lastModified, hasNewVersionEvent
+- carry forward daysUntilExpiry, eventType, expiryTime, lastModified, hasNewVersionEvent,
+  current_release_version, future_release_version, and release-calendar evidence
   needed by Phase 4 of the execute flow
 - approval_gate_flags: append one entry per row when any of these hold:
     - existing incident > 7 days old (possible stale reuse)

@@ -13,6 +13,11 @@ This skill provides Jira Cloud operational capabilities for project discovery an
 - If a new artifact is needed, extend the smallest existing one or make it promotion-ready with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
 - Avoid duplicate tooling and propagate any reusable change to relevant agents, prompts, skills, and docs.
 
+## Local Field Catalog Preference
+- For any field lookup, field-name resolution, custom-field reference, or create/update payload mapping, prefer `data/jira_field_catalog_2026-08-19T100449Z.json` before making live Jira metadata calls.
+- Fall back to live metadata such as `/rest/api/3/issue/createmeta` only when the local catalog is unavailable, stale for the requested project/issue type, or missing the needed field detail.
+- Report whether the local catalog or live metadata was used when field resolution affects the operation.
+
 ## Credential Requirements
 
 The skill expects these variables in `.env`:
@@ -132,8 +137,10 @@ Expected behavior for DDL dry-run/execute payloads:
 	- If Banner is single-select on the target project, apply first available default and require manual live follow-up
 - Components mapped from kind as selectable field values
 - Root cause selectable value: `Code` (when field exists)
-- Fix versions from upcoming release input and affected version from current release input
-	- Release values should be derived from Digital Release Calendar closest-date mapping for current vs upcoming windows
+- Resolve release values through `ConfluenceClient.resolve_release_calendar()` before ticket creation.
+	`Affected version` is always set to `current_release_version` when that Jira field exists, and
+	`Fix Versions` is set to `future_release_version`. Current is the latest production deployment on
+	or before the evaluation date; future is the nearest production deployment after it.
 - Exclude `RCA_Code` label and avoid evidence-metadata blocks in description templates
 
 ## API Endpoints Used

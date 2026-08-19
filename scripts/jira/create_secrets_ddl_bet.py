@@ -4,9 +4,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -37,8 +35,9 @@ DDL_ROOT_CAUSE = "Lifecycle Management"
 DDL_PRIORITY = "Major"
 DDL_COMPONENT = "Azure"
 DDL_TEAM = "Site Reliability Engineering"
+DDL_TARGET_STATUS = "Ready for QA"
 BET_TEAM = "[Daas] Operational Squad"
-BET_LABELS = ["DaaS"]
+BET_LABELS = ["DaaS", "collector-ad5a51d7"]
 RELEASE_CALENDAR_PAGE_ID = "80217385"
 
 
@@ -136,7 +135,7 @@ def component_payload(client: JiraClient, *, project: str, issue_type: str) -> D
 
 
 def resolve_release_versions() -> Dict[str, Any]:
-    """Resolve current/upcoming release values from the authoritative calendar."""
+    """Resolve release values through the shared Confluence release contract."""
     confluence_path = PROJECT_ROOT / ".github" / "skills" / "confluence-knowledge-operations"
     if str(confluence_path) not in sys.path:
         sys.path.insert(0, str(confluence_path))
@@ -145,33 +144,16 @@ def resolve_release_versions() -> Dict[str, Any]:
         sys.path.insert(0, str(confluence_auth_path))
     from confluence_client import ConfluenceClient  # type: ignore[import-not-found]
 
-    page = ConfluenceClient.from_env().get_page(page_id=RELEASE_CALENDAR_PAGE_ID)
-    body = ((page.get("body") or {}).get("storage") or {}).get("value") or ""
-    rows = []
-    for row_html in re.findall(r"<tr\b.*?</tr>", body, flags=re.IGNORECASE | re.DOTALL):
-        dates = re.findall(r'<time[^>]+datetime="(\d{4}-\d{2}-\d{2})"', row_html, flags=re.IGNORECASE)
-        versions = re.findall(r"\b(?:RC-)?\d{2,4}\.\d{2}\b", row_html, flags=re.IGNORECASE)
-        if not dates or not versions:
-            continue
-        try:
-            release_date = date.fromisoformat(dates[-1])
-        except ValueError:
-            continue
-        version = versions[0].upper()
-        if not version.startswith("RC-"):
-            version = f"RC-{version}"
-        rows.append((release_date, version))
-    if not rows:
-        raise JiraValidationError("No release versions found on the Digital Release Calendar")
-    today = date.today()
-    past = sorted((row for row in rows if row[0] <= today), reverse=True)
-    future = sorted(row for row in rows if row[0] > today)
-    if not past or not future:
-        raise JiraValidationError("Release Calendar did not provide both current and upcoming versions")
+    try:
+        resolved = ConfluenceClient.from_env().resolve_release_calendar(
+            page_id=RELEASE_CALENDAR_PAGE_ID,
+        )
+    except Exception as exc:
+        raise JiraValidationError(f"Unable to resolve release calendar: {exc}") from exc
     return {
-        "current": past[0][1],
-        "upcoming": future[0][1],
-        "source_page_id": RELEASE_CALENDAR_PAGE_ID,
+        "current": resolved["current_release_version"],
+        "upcoming": resolved["future_release_version"],
+        **resolved,
     }
 
 
@@ -227,6 +209,35 @@ def build_fields(client: JiraClient, current_release: str, upcoming_release: str
     }
 
 
+def transition_to_target_status(client: JiraClient, issue_key: str, target_status: str) -> str:
+    issue = client._request("GET", f"/rest/api/3/issue/{issue_key}", params={"fields": "status"})
+    current_status = str(((issue.get("fields") or {}).get("status") or {}).get("name") or "").strip()
+    if current_status.lower() == target_status.lower():
+        return "already_at_target"
+
+    transition_data = client._request("GET", f"/rest/api/3/issue/{issue_key}/transitions")
+    transitions = transition_data.get("transitions") or []
+    transition = next(
+        (
+            item for item in transitions
+            if str((item.get("to") or {}).get("name") or "").strip().lower() == target_status.lower()
+        ),
+        None,
+    )
+    transition_id = str((transition or {}).get("id") or "").strip()
+    if not transition_id:
+        raise JiraValidationError(
+            f"DDL issue {issue_key} cannot transition from '{current_status or 'unknown'}' to '{target_status}'."
+        )
+
+    client._request(
+        "POST",
+        f"/rest/api/3/issue/{issue_key}/transitions",
+        json={"transition": {"id": transition_id}},
+    )
+    return "transitioned"
+
+
 def create_or_reuse(client: JiraClient, args: argparse.Namespace) -> Dict[str, Any]:
     releases = resolve_release_versions()
     current_release = args.current_release or releases["current"]
@@ -251,6 +262,7 @@ def create_or_reuse(client: JiraClient, args: argparse.Namespace) -> Dict[str, A
                 "components": [DDL_COMPONENT],
                 "component_payload": extra_fields["components"],
                 "team": DDL_TEAM,
+                "target_status": DDL_TARGET_STATUS,
             },
             "bet": {
                 "project": "BET",
@@ -279,6 +291,7 @@ def create_or_reuse(client: JiraClient, args: argparse.Namespace) -> Dict[str, A
         raise JiraValidationError("DDL creation did not return an issue key")
     client.update_issue(ddl_key, fields=extra_fields)
     ddl_team = client.set_issue_team(issue_key=ddl_key, team_name=DDL_TEAM, project_key="DDL", verify=True)
+    ddl_status_action = transition_to_target_status(client, ddl_key, DDL_TARGET_STATUS)
     servicenow_client = ServiceNowClient.from_env()
     incident = servicenow_client._find_incident(incident_number=args.incident_number, sys_id=None)  # pylint: disable=protected-access
     if servicenow_client.is_resolved_state(incident.get("state")):
@@ -332,6 +345,8 @@ def create_or_reuse(client: JiraClient, args: argparse.Namespace) -> Dict[str, A
         "ddl_key": ddl_key,
         "ddl_action": ddl_action,
         "ddl_team": ddl_team,
+        "ddl_target_status": DDL_TARGET_STATUS,
+        "ddl_status_action": ddl_status_action,
         "service_now_incident": updated_incident.get("number") or args.incident_number,
         "vendor_ticket": ddl_key,
         "bet_key": bet_key,

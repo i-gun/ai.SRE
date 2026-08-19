@@ -75,6 +75,14 @@ Output (impact_matrix) — required as input to Phase 2:
     expiryTime, lastModified, hasNewVersionEvent (boolean)
 - total_secrets_at_risk, secrets_by_urgency{}
 
+**STOP CONDITION — NO EXPIRING SECRETS:** If `total_secrets_at_risk = 0` or
+`grouped_secrets[]` is empty after Phase 1, report that no expiring secrets were found
+for the requested business unit and window. Stop the flow immediately. Do not dispatch
+@Jira, @ServiceNow, or @Confluence; do not run incident, problem, issue, chain, or
+release-calendar lookups; do not persist a resolution matrix; and do not perform any
+writes. The final report must state that no further lookups or release version
+retrieval were necessary.
+
 ━━━ PHASE 2 — Chain Discovery and Incident Lookup [parallel] ━━━
 
 Dispatch the following three agent tasks at the same time using the impact_matrix from Phase 1.

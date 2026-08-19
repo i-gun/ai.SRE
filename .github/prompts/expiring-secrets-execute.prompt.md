@@ -110,9 +110,10 @@ Jira DDL/BET (only for rows needing DDL/BET creation or repair):
     components = [Azure], team = Site Reliability Engineering,
     rootCause = Lifecycle Management, priority = Major,
     ServiceNow Priority = P3 (selectable option),
+    status = Ready for QA (resolve the transition for the specific DDL ticket and apply it),
     description must exactly match the ServiceNow Incident description for the same tuple
   On successful DDL creation, clone its summary and description into BET as a Task,
-  assign team [Daas] Operational Squad, add label DaaS, and cross-link DDL <-> BET
+  assign team [Daas] Operational Squad, add labels DaaS and collector-ad5a51d7, and cross-link DDL <-> BET
   (relates-to).
 
 Use the promoted Secrets handoff for this operation:
@@ -123,8 +124,8 @@ Use the promoted Secrets handoff for this operation:
     --description "{service_now_incident_description}" --idempotency-days 30
 
 The handoff is idempotent, creates the DDL `Problem` first, applies the required
-fields, resolves current/upcoming versions from the Confluence Digital Release
-Calendar, writes Affected version and Fix Versions to both DDL and BET, writes
+fields, resolves current/future versions from the Confluence Digital Release
+Calendar using production deployment dates, writes Affected version and Fix Versions to both DDL and BET, writes
 the resulting DDL key to the ServiceNow Incident Vendor Ticket field, then creates
 the BET `Task` clone and links the two Jira issues. After the
 chain is verified, resolve the Incident with State = Resolved, Resolution code =

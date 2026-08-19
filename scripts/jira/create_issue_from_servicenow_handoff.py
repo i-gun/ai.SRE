@@ -50,9 +50,15 @@ from bootstrap_shared import bootstrap_paths
 from jira.adf_common import text_to_adf
 
 JIRA_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "jira-issue-operations"
-bootstrap_paths(skill_paths=[JIRA_SKILL_PATH], override_env=True)
+CONFLUENCE_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "confluence-knowledge-operations"
+CONFLUENCE_AUTH_PATH = PROJECT_ROOT / ".github" / "skills" / "confluence-authentication"
+bootstrap_paths(
+    skill_paths=[JIRA_SKILL_PATH, CONFLUENCE_SKILL_PATH, CONFLUENCE_AUTH_PATH],
+    override_env=True,
+)
 
 from jira_client import JiraAPIError, JiraClient, JiraValidationError
+from confluence_client import ConfluenceClient
 
 # ---------------------------------------------------------------------------
 # Organisation-level constants (stable across all DDL handoffs)
@@ -62,6 +68,7 @@ TEAM_NAME = "Site Reliability Engineering"
 TEAM_UUID = "472b84df-0340-44a7-91ee-fc748691daa7"
 DDL_LABELS = ["L2toL3", "ODP", "SRE"]
 DDL_PRIORITY = "Major"
+RELEASE_CALENDAR_PAGE_ID = "80217385"
 
 INC_PATTERN = re.compile(r"^INC\d+$", re.IGNORECASE)
 PRB_PATTERN = re.compile(r"^PRB\d{7}$", re.IGNORECASE)
@@ -256,6 +263,15 @@ def make_description(incident_description: str) -> str:
     return (incident_description or "").strip()
 
 
+def resolve_release_versions() -> Dict[str, Any]:
+    try:
+        return ConfluenceClient.from_env().resolve_release_calendar(
+            page_id=RELEASE_CALENDAR_PAGE_ID,
+        )
+    except Exception as exc:
+        raise JiraValidationError(f"Unable to resolve release calendar: {exc}") from exc
+
+
 def verify_issue_type(issue: Dict[str, Any], expected: str) -> Tuple[Optional[str], bool]:
     fields = issue.get("fields", {}) if isinstance(issue, dict) else {}
     issuetype = fields.get("issuetype", {}) if isinstance(fields, dict) else {}
@@ -388,6 +404,17 @@ def main(argv: Optional[List[str]] = None) -> None:
 
         summary = make_summary(args.incident_summary)
         description = make_description(args.incident_description)
+        resolved_releases = resolve_release_versions()
+        current_release = resolved_releases["current_release_version"]
+        future_release = resolved_releases["future_release_version"]
+        if args.current_release and args.current_release.strip() != current_release:
+            return _fail(
+                "Provided --current-release does not match the authoritative Confluence release calendar."
+            )
+        if args.upcoming_release and args.upcoming_release.strip() != future_release:
+            return _fail(
+                "Provided --upcoming-release does not match the authoritative Confluence release calendar."
+            )
         extra_fields = {
             banner_field: build_multi_select_payload(banner_meta, banner_option_ids),
             sn_priority_field: {"id": sn_priority_option_id},
@@ -395,10 +422,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         }
         if components_payload:
             extra_fields["components"] = components_payload
-        if args.upcoming_release:
-            extra_fields["fixVersions"] = [{"name": args.upcoming_release.strip()}]
-        if affected_version_field and args.current_release:
-            extra_fields[affected_version_field] = [{"name": args.current_release.strip()}]
+        extra_fields["fixVersions"] = [{"name": future_release}]
+        if affected_version_field:
+            extra_fields[affected_version_field] = [{"name": current_release}]
         if root_cause_field and root_cause_option_id:
             extra_fields[root_cause_field] = build_select_payload(root_cause_meta, root_cause_option_id)
 
@@ -419,8 +445,9 @@ def main(argv: Optional[List[str]] = None) -> None:
                 "sn_priority_short": sn_priority_short,
                 "sn_priority_option_id": sn_priority_option_id,
                 "root_cause_option_id": root_cause_option_id,
-                "current_release": args.current_release,
-                "upcoming_release": args.upcoming_release,
+                "current_release": current_release,
+                "upcoming_release": future_release,
+                "release_calendar": resolved_releases,
                 "parent_jira_ticket": parent_jira_ticket,
                 "extra_fields_keys": list(extra_fields.keys()),
             }, indent=2, ensure_ascii=True))
@@ -455,10 +482,9 @@ def main(argv: Optional[List[str]] = None) -> None:
             field_mapping_applied.append(
                 "Components=" + ",".join(item.get("name", "") for item in components_payload)
             )
-        if args.upcoming_release:
-            field_mapping_applied.append(f"FixVersions={args.upcoming_release.strip()}")
-        if args.current_release:
-            field_mapping_applied.append(f"AffectedVersion={args.current_release.strip()}")
+        field_mapping_applied.append(f"FixVersions={future_release}")
+        if affected_version_field:
+            field_mapping_applied.append(f"AffectedVersion={current_release}")
         if root_cause_field and root_cause_option_id:
             field_mapping_applied.append("RootCause=Code")
 

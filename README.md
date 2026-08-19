@@ -323,3 +323,34 @@ This section is automatically maintained by pre-commit hooks.
 - `git-hooks/pre-commit` - 0 line changes
 
 
+
+## Recent Changes
+
+**Updated: 2026-08-19 13:23:58**
+
+**New Files Added** (2):
+- `scripts/jira/export_field_catalog.py` - Python implementation
+- `scripts/servicenow/export_table_fields.py` - Python implementation
+
+**Files Modified** (19):
+- `.github/agents/jira.agent.md` - 11 line changes
+- `.github/agents/servicenow.agent.md` - 7 line changes
+- `.github/prompts/cve-impact-analysis.prompt.md` - 27 line changes
+- `.github/prompts/cve-impact-daily-operator.prompt.md` - 27 line changes
+- `.github/prompts/cve-impact-execute.prompt.md` - 21 line changes
+- `.github/prompts/expiring-secrets-analysis.prompt.md` - 25 line changes
+- `.github/prompts/expiring-secrets-daily-operator.prompt.md` - 10 line changes
+- `.github/prompts/expiring-secrets-execute.prompt.md` - 9 line changes
+- `.github/skills/confluence-knowledge-operations/SKILL.md` - 13 line changes
+- `.github/skills/confluence-knowledge-operations/confluence_client.py` - 90 line changes
+- `.github/skills/jira-issue-operations/SKILL.md` - 13 line changes
+- `.github/skills/jira-issue-operations/jira_client.py` - 10 line changes
+- `.github/skills/servicenow-incident-operations/servicenow_client.py` - 5 line changes
+- `scripts/jira/create_issue_from_servicenow_handoff.py` - 50 line changes
+- `scripts/jira/create_secrets_ddl_bet.py` - 77 line changes
+- `scripts/servicenow/create_cve_incident_problem.py` - 60 line changes
+- `scripts/servicenow/cve_payload_preview.py` - 47 line changes
+- `tests/test_confluence_client.py` - 54 line changes
+- `tests/test_servicenow_client.py` - 4 line changes
+
+
