@@ -175,7 +175,7 @@ Behavior:
     - `category` <- `Application`
     - `subcategory` <- `E-Commerce`
     - `problem_statement` <- incident `short_description`
-    - `description` <- incident `description`
+    - `description` <- incident `description` (copied as-is; no rephrasing/enrichment)
     - `service_offering` <- incident `cmdb_ci` (blank if empty)
     - `cmdb_ci` <- incident `cmdb_ci` (blank if empty)
 - Patch incident `problem_id` with created problem `sys_id`
@@ -185,6 +185,26 @@ Validation:
 - Source incident must exist in designated scope
 - Created problem must return `sys_id`
 - Incident linkage update must succeed
+
+**Origin task / first_reported_by_task linkage note (strict incident->problem->Jira flow only):**
+`origin_task` is not reliably readable on this instance (see platform findings memory). Immediately
+after `create_problem_from_incident(...)`, call `update_problem_fields(problem_sys_id=..., fields={"first_reported_by_task": incident_sys_id})`
+and treat `first_reported_by_task` as the authoritative linkage-verification field, with `origin_task`
+as best-effort/secondary. This is additive-only and does not change the base create payload used by
+other flows.
+
+### 12. Fetch Incident Attachments (Strict Incident->Problem->Jira Flow)
+List and download file attachments (docs, images) from a source incident so they can be re-uploaded
+to the resulting Jira issue.
+
+Behavior:
+- `list_incident_attachments(incident_sys_id=...)` lists `sys_attachment` metadata (`sys_id`, `file_name`,
+  `content_type`, `size_bytes`) scoped to `table_name=incident^table_sys_id=<incident sys_id>`
+- `download_attachment(attachment_sys_id=...)` returns raw file bytes for a single attachment
+
+Validation:
+- Attachment propagation failures are non-blocking for this flow (`partial_success`), never a reason
+  to skip incident resolution on their own
 
 ### 8. Route Issue Creation From Problem (Native ServiceNow->Jira Preferred)
 When explicitly requested, route issue creation from a problem.
@@ -240,8 +260,11 @@ Validation:
 - `PATCH /api/now/table/incident/{sys_id}`
 - `GET /api/now/table/problem`
 - `POST /api/now/table/problem`
+- `PATCH /api/now/table/problem/{sys_id}`
 - `GET /api/now/table/problem_task`
 - `POST /api/now/table/problem_task`
+- `GET /api/now/attachment` (incident attachment metadata; strict incident->problem->Jira flow)
+- `GET /api/now/attachment/{sys_id}/file` (incident attachment download; strict incident->problem->Jira flow)
 
 > `/api/now/table/issue` does **not** exist on this instance and must not be used.
 
@@ -275,6 +298,20 @@ Reject low-quality notes such as:
 - "resolved"
 - "done"
 
+**No internal flow-execution detail enrichment (all incident/problem write paths):** `description`,
+`work_notes`, and `close_notes` must contain only human/business-facing content (incident narrative,
+remediation, linkage references such as INC/PRB/Jira numbers). Never write internal automation
+bookkeeping — flow/run identifiers, content-fingerprint hashes, checkpoint names, internal reason codes —
+into any of these fields. Keep that telemetry solely in the calling agent's own structured result payload.
+
+**Handoff-closure exception (strict incident->problem->Jira flow only):** when an incident is being
+resolved solely because ownership moved to a linked Jira issue (PRB + Jira issue both created and
+parity-verified), accept the compact template below in place of the 3-part quality note. This does not
+relax the standard for any other resolution path:
+- `"Incident closed. Investigation ongoing under scope of <ISSUE_KEY> (<issue_url>)."`
+- Acceptance requires the note to contain a resolvable Jira issue key/URL; a bare "closed" note without
+  a linked issue reference is still rejected.
+
 ## Python Implementation
 
 Use [servicenow_client.py](servicenow_client.py) for operational code.
@@ -287,6 +324,8 @@ Core methods:
 - `assign_incident(...)`
 - `set_priority_by_matrix(...)`
 - `create_problem_from_incident(...)` — returns `{problem, incident}`
+- `update_problem_fields(...)` — additive patch helper (used by strict flow for `first_reported_by_task` backfill)
+- `list_incident_attachments(...)` / `download_attachment(...)` — strict flow attachment propagation to Jira
 - `create_issue_from_problem(...)` — optional native helper mode that creates PTASK
 - `detect_native_jira_from_problem_capability(...)` — native capability classification
 - `create_native_jira_issue_from_problem(...)` — native route execution when available

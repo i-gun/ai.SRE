@@ -1,11 +1,15 @@
 name: Python Tests
 
+# NOTE: pull_request is the gating check (required status check for branch
+# protection on main). The push trigger below only runs a post-merge smoke
+# re-run for visibility and does NOT gate anything — merges must go through
+# a Pull Request with this workflow green, per main branch protection rules.
 on:
+  pull_request:
   push:
     branches:
       - main
       - master
-  pull_request:
 
 jobs:
   unittest:

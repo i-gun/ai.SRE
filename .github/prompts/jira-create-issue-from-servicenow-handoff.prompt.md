@@ -24,21 +24,28 @@ INPUT CONTRACT (from ServiceNow):
 - canonical_context (required object)
 - canonical_short_description (required normalized string)
 - canonical_description (required normalized string)
-- context_fingerprint (required)
-- flow_run_id (required)
+- context_fingerprint (required; internal correlation value for this handoff call only)
+- flow_run_id (required; internal correlation value for this handoff call only)
 - routing_project (DDL or ODPT)
 - required_issue_type (must be `Problem` for DDL/ODPT unless explicit override is approved)
 - issue_type_override (optional)
 - issue_type_override_approved (boolean, required when override is provided)
 - retry_mode (optional: first_attempt | retry)
 - existing_issue_key (optional)
+- affects_version (optional; latest release version resolved by ServiceNow via `ConfluenceClient.resolve_release_calendar()`)
+- incident_attachments (optional; list of `{filename, content_base64, content_type}` support files from the source incident)
 
 STRICT EXECUTION POLICY:
 
 0) Validate canonical context contract:
    - `canonical_context`, `canonical_short_description`, `canonical_description`, `context_fingerprint`, and `flow_run_id` are mandatory.
    - If `canonical_description` is empty, fail with explicit reason (`MISSING_CANONICAL_DESCRIPTION`).
-   - Jira summary/description MUST be derived from canonical values only; do not regenerate from alternate text.
+   - `canonical_short_description` and `canonical_description` MUST be the incident's raw `short_description`/`description`
+     values (whitespace-trim only). Do not regenerate, paraphrase, summarize, or otherwise enrich these values —
+     copy them into Jira fields as-is.
+   - `context_fingerprint` and `flow_run_id` are internal orchestration bookkeeping only. Never write them, or
+     any other internal flow-execution detail, into the issue `summary`, `description`, or comments. They are
+     used only for this handoff call's own idempotency checks and returned in the result payload (Step 6).
 
 1) Validate routing:
    - If routing_project=DDL, create in project DDL
@@ -54,10 +61,15 @@ STRICT EXECUTION POLICY:
 1.2) Idempotency and retry handling:
     - If retry_mode=retry or existing_issue_key is provided:
        - Re-fetch existing issue when key is supplied.
-       - Search for an existing issue in target project matching incident_number + problem_number + context_fingerprint marker.
-    - If matching issue exists and passes parity checks, reuse it and skip create.
+       - Search for an existing issue in target project matching incident_number + problem_number via the
+         `ServiceNow #` field and/or the required summary format; do not rely on any fingerprint/hash marker
+         embedded in issue text (none is ever written there).
+    - If matching issue exists, compare its stored summary/description directly against the current
+      canonical_short_description/canonical_description; treat as parity-passing only on exact match
+      (whitespace-trim tolerated).
+    - If matching issue exists and passes parity, reuse it and skip create.
     - If matching issue exists but parity fails, return `failed` and require explicit operator recreate approval.
-    - Never create duplicate issues for the same incident_number + context_fingerprint in a single run.
+    - Never create duplicate issues for the same incident_number + problem_number in a single run.
 
 2) Resolve custom fields by name before create/update:
    - Banner
@@ -74,11 +86,24 @@ STRICT EXECUTION POLICY:
    - Description must include all required blocks:
      1. Source Incident: number, sys_id, and reference
      2. Source Problem: number, sys_id/url when available
-     3. Incident Description: full canonical_description (exact or deterministic normalized equivalent)
+     3. Incident Description: full canonical_description, copied as-is (whitespace-trim only; no paraphrase/summary/enrichment)
      4. Final Priority/Impact/Urgency
      5. Service metadata from canonical_context (category/subcategory/service_offering/cmdb_ci)
-     6. Traceability markers: flow_run_id and context_fingerprint
+   - Do NOT include flow_run_id, context_fingerprint, or any other internal flow-execution detail in the
+     summary, description, or any comment added to the issue; those remain internal-only (Step 6 result payload).
    - If any block is missing before create, STOP with failed status and diagnostics.
+
+3.1) Set Affects Version/s (DDL/ODPT routes only):
+   - When `affects_version` is provided in the input contract, apply it to the created issue's system
+     `Affects Version/s` field via `update_issue(issue_key, fields={"versions": [{"name": affects_version}]})`.
+   - If `affects_version` is missing or the field update fails, record a diagnostics warning
+     (`AFFECTS_VERSION_NOT_APPLIED`) and continue — this is supportive metadata, not a create-blocking field.
+
+3.2) Propagate incident support files (optional, non-blocking):
+   - When `incident_attachments` is provided, decode each entry and call
+     `add_attachment(issue_key, filename=..., content=..., content_type=...)` for every file.
+   - Record `attachments_uploaded` (count + filenames) and any per-file failures in diagnostics
+     (`ATTACHMENT_UPLOAD_FAILED`); attachment failures never fail the overall create/handoff.
 
 4) Apply mapping by route:
    - DDL route:
@@ -111,8 +136,9 @@ STRICT EXECUTION POLICY:
    - Verify actual Jira issue type equals requested/required issue type
    - Verify summary matches required summary format
    - Verify description contains all mandatory blocks
-   - Verify `context_fingerprint` is present and exact-match
-   - Verify incident and problem identifiers in Jira match input contract
+   - Verify incident and problem identifiers in Jira match input contract exactly (structural reference
+     match via Source Incident/Source Problem blocks and the `ServiceNow #` field; no fingerprint marker
+     is ever written to or read from issue text)
 
 5.1) Status policy for Team:
    - Return `success` only when Team mapping is required and Team is verified (id + name/title) after update.
@@ -120,7 +146,7 @@ STRICT EXECUTION POLICY:
    - Return `failed` when required issue type/routing/core field mappings fail.
 
 5.2) Parity verification policy:
-   - `parity_verified=true` only when summary, description blocks, and fingerprint all match.
+   - `parity_verified=true` only when summary, description blocks, and incident/problem identifiers all match.
    - If issue exists but parity verification fails, set status=`failed_parity_validation`.
    - Do not return `success` or `partial_success` when parity verification fails.
 
@@ -132,13 +158,15 @@ STRICT EXECUTION POLICY:
    - issue_type_created
    - issue_type_verified
    - route_used (jira_agent_delegation)
-   - flow_run_id
-   - context_fingerprint
+   - flow_run_id (internal correlation only; never written to issue text)
+   - context_fingerprint (internal correlation only; never written to issue text)
    - checkpoints: input_validated, route_validated, issue_created_or_reused, fields_mapped, parity_verified
    - issue_reused (true/false)
    - labels_before
    - labels_after
    - field_mapping_applied (list)
+   - affects_version_applied (true/false)
+   - attachments_uploaded (count + filenames)
    - parity_verified (true/false)
    - status: success | partial_success | failed | failed_parity_validation
    - failure_reason (if any)

@@ -486,6 +486,60 @@ class JiraClient:
             "team_name": applied_team_name,
         }
 
+    def add_attachment(
+        self,
+        issue_key: str,
+        *,
+        filename: str,
+        content: bytes,
+        content_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Upload a file attachment to an existing issue (multipart upload).
+
+        Additive method used for incident->problem->Jira handoff support files
+        (docs, images); does not affect CVE/secrets flow field mappings or scripts.
+        Jira requires bypassing XSRF check via X-Atlassian-Token for this endpoint,
+        so this bypasses the shared JSON session and issues a standalone request.
+        """
+        normalized_issue_key = self._normalize_issue_key(issue_key)
+        normalized_filename = (filename or "").strip()
+        if not normalized_filename:
+            raise JiraValidationError("filename is required for attachment upload.")
+        if not content:
+            raise JiraValidationError("content is required for attachment upload.")
+
+        try:
+            response = requests.post(
+                self._url(f"{self.ISSUE_PATH}/{normalized_issue_key}/attachments"),
+                auth=(self.config.username, self.config.api_token),
+                headers={"X-Atlassian-Token": "no-check", "Accept": "application/json"},
+                files={
+                    "file": (
+                        normalized_filename,
+                        content,
+                        content_type or "application/octet-stream",
+                    )
+                },
+                timeout=self.DEFAULT_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as exc:
+            raise JiraAPIError(f"Jira attachment upload failed: {exc}") from exc
+
+        if response.status_code >= 400:
+            detail = self._safe_error_detail(response)
+            raise JiraAPIError(
+                f"Jira attachment upload error ({response.status_code}): {detail}"
+            )
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise JiraAPIError("Jira attachment upload returned non-JSON response") from exc
+
+        if isinstance(payload, list) and payload:
+            return payload[0]
+        return {"raw": payload}
+
     def add_comment(self, issue_key: str, *, comment: str) -> Dict[str, Any]:
         normalized_issue_key = self._normalize_issue_key(issue_key)
         normalized_comment = comment.strip()
