@@ -354,3 +354,30 @@ This section is automatically maintained by pre-commit hooks.
 - `tests/test_servicenow_client.py` - 4 line changes
 
 
+
+## Recent Changes
+
+**Updated: 2026-08-26 11:29:23**
+
+**New Files Added** (3):
+- `.github/CODEOWNERS`
+- `.github/prompts/gitter-pull-request.prompt.md` - Documentation
+- `scripts/gitter/verify_branch_protection.py` - Python implementation
+
+**Files Modified** (14):
+- `.env.example` - 3 line changes
+- `.env.template` - 31 line changes
+- `.github/agents/gitter.agent.md` - 16 line changes
+- `.github/prompts/gitter-repository-sync.prompt.md` - 36 line changes
+- `.github/prompts/jira-create-issue-from-servicenow-handoff.prompt.md` - 56 line changes
+- `.github/prompts/servicenow-incident-to-prb-jira-strict.prompt.md` - 108 line changes
+- `.github/skills/gitter-credentials/SKILL.md` - 26 line changes
+- `.github/skills/gitter-credentials/gitter_credentials.py` - 27 line changes
+- `.github/skills/jira-issue-operations/SKILL.md` - 37 line changes
+- `.github/skills/jira-issue-operations/jira_client.py` - 56 line changes
+- `.github/skills/servicenow-incident-operations/SKILL.md` - 43 line changes
+- `.github/skills/servicenow-incident-operations/servicenow_client.py` - 76 line changes
+- `.github/workflows/python-tests.yml` - 8 line changes
+- `docs/GITTER_CREDENTIALS_SKILL_SUMMARY.md` - 3 line changes
+
+

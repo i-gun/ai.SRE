@@ -1,0 +1,11 @@
+# CODEOWNERS
+#
+# Required reviewers for protected branches (main). This file only takes
+# effect once GitHub branch protection on `main` has "Require review from
+# Code Owners" enabled — see scripts/gitter/verify_branch_protection.py.
+#
+# Replace the placeholder below with actual GitHub usernames/teams.
+# Derived from origin remote (git@github.com:i-gun/ai.SRE.git) — update if
+# ownership changes or additional reviewers/teams are added.
+
+* @i-gun

@@ -91,6 +91,7 @@ test_ai/
 | **GPG Signing** | Optional | true / false | Commit verification |
 | **GPG Key ID** | Conditional | 16-char ID | GPG key selection |
 | **Profile** | Optional | dev/staging/prod | Environment selection |
+| **Protected Branches** | Optional (default `main,master`) | Comma-separated names/globs | Blocks direct commit/push; forces PR workflow |
 
 ### 2. Authentication Methods
 

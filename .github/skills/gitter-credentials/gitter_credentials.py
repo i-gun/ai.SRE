@@ -16,6 +16,7 @@ Usage:
 
 import os
 import json
+import fnmatch
 from pathlib import Path
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
@@ -36,12 +37,14 @@ class GitCredentials:
     git_user_email: str
     auth_method: AuthMethod
     github_token: Optional[str] = None
+    github_pr_token: Optional[str] = None
     ssh_key_path: Optional[str] = None
     ssh_passphrase: Optional[str] = None
     gpg_signing_enabled: bool = False
     gpg_key_id: Optional[str] = None
     gpg_signing_key_path: Optional[str] = None
     environment_profile: str = "dev"
+    protected_branches: tuple[str, ...] = ("main", "master")
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, excluding None values and sensitive data"""
@@ -50,12 +53,18 @@ class GitCredentials:
             "git_user_email": self.git_user_email,
             "auth_method": self.auth_method.value,
             "github_token": "***REDACTED***" if self.github_token else None,
+            "github_pr_token": "***REDACTED***" if self.github_pr_token else None,
             "ssh_key_path": self.ssh_key_path,
             "ssh_passphrase": "***REDACTED***" if self.ssh_passphrase else None,
             "gpg_signing_enabled": self.gpg_signing_enabled,
             "gpg_key_id": self.gpg_key_id,
             "environment_profile": self.environment_profile,
+            "protected_branches": list(self.protected_branches),
         }
+    
+    def is_protected_branch(self, branch: str) -> bool:
+        """Return True if branch matches a protected branch name/pattern (e.g. release/*)"""
+        return any(fnmatch.fnmatch(branch, pattern) for pattern in self.protected_branches)
 
 
 class CredentialError(Exception):
@@ -184,6 +193,11 @@ class CredentialsLoader:
                     "Create at https://github.com/settings/tokens"
                 )
         
+        # GitHub PR token (gh CLI Pull Request operations) - optional, distinct
+        # from GITHUB_TOKEN. Least-privilege token (Contents + Pull requests
+        # read/write) used only for `gh pr create/checks/merge`.
+        github_pr_token = config.get('GITHUB_PR_TOKEN', '').strip() or None
+        
         # SSH configuration
         ssh_key_path = config.get('GITHUB_SSH_KEY_PATH', '').strip() or None
         ssh_passphrase = config.get('GITHUB_SSH_PASSPHRASE', '').strip() or None
@@ -228,6 +242,12 @@ class CredentialsLoader:
                 f"got '{environment_profile}'"
             )
         
+        # Protected branches (never accept direct commits/pushes)
+        protected_branches_str = config.get('GIT_PROTECTED_BRANCHES', 'main,master').strip()
+        protected_branches = tuple(
+            b.strip() for b in protected_branches_str.split(',') if b.strip()
+        ) or ("main", "master")
+        
         # Raise errors if any
         if errors:
             error_msg = "Credential validation failed:\n  " + "\n  ".join(errors)
@@ -238,12 +258,14 @@ class CredentialsLoader:
             git_user_email=git_user_email,
             auth_method=auth_method,
             github_token=github_token,
+            github_pr_token=github_pr_token,
             ssh_key_path=ssh_key_path,
             ssh_passphrase=ssh_passphrase,
             gpg_signing_enabled=gpg_signing_enabled,
             gpg_key_id=gpg_key_id,
             gpg_signing_key_path=gpg_signing_key_path,
             environment_profile=environment_profile,
+            protected_branches=protected_branches,
         )
     
     def validate(self, profile: str = "dev") -> tuple[bool, str]:
@@ -286,9 +308,12 @@ SSH Configuration:
   Passphrase: {"Set" if creds.ssh_passphrase else "Not set"}
 
 GitHub Token: {"Configured" if creds.github_token else "Not configured"}
+GitHub PR Token (gh CLI): {"Configured" if creds.github_pr_token else "Not configured"}
 
 GPG Signing: {"Enabled" if creds.gpg_signing_enabled else "Disabled"}
   Key ID: {creds.gpg_key_id or "Not configured"}
+
+Protected Branches: {", ".join(creds.protected_branches)}
 
 Status: ✓ Valid
             """

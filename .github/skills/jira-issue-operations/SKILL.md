@@ -120,6 +120,32 @@ Behavior:
 - Default link type to `Relates` when omitted
 - Optionally add a comment after link creation when requested
 
+### 8A. Add Attachment To Issue (Strict Incident->Problem->Jira Flow)
+Upload a file (doc, image, log) as an attachment on an existing issue, for propagating incident
+support files during handoff.
+
+Behavior:
+- `add_attachment(issue_key, filename=..., content=<bytes>, content_type=...)` uploads via multipart
+  to `/rest/api/3/issue/{issueIdOrKey}/attachments`
+- Requires `X-Atlassian-Token: no-check` header (Jira XSRF bypass for this endpoint specifically)
+- Returns created attachment metadata (`id`, `filename`, `size`)
+
+Validation:
+- Issue identifier, filename, and non-empty content are required
+- Attachment upload failures are non-blocking for the strict incident->problem->Jira flow
+  (report `partial_success`); do not fail an otherwise-successful issue creation over attachment errors
+
+### 8B. Set Affects Version/s From Latest Release (Strict Incident->Problem->Jira Flow)
+For the strict incident->problem->Jira handoff (not the CVE DDL handoff in Capability 9), set the
+system `Affects Version/s` field to the latest production release using the existing release-calendar
+resolver — no new tooling required.
+
+Behavior:
+- Resolve `current_release_version` via `ConfluenceClient.resolve_release_calendar()` (same promoted
+  resolver used by the CVE flow)
+- Apply with `update_issue(issue_key, fields={"versions": [{"name": current_release_version}]})`
+- Applies to DDL/ODPT routes in the strict flow only; does not change CVE DDL handoff field mapping
+
 ### 9. CVE DDL Handoff Payload Mapping
 For CVE INC->PRB->DDL handoff flows, use promoted script:
 - `python scripts/jira/create_issue_from_servicenow_handoff.py`
@@ -154,6 +180,7 @@ Expected behavior for DDL dry-run/execute payloads:
 - `PUT /rest/api/3/issue/{issueIdOrKey}`
 - `POST /rest/api/3/issue/{issueIdOrKey}/comment`
 - `POST /rest/api/3/issueLink`
+- `POST /rest/api/3/issue/{issueIdOrKey}/attachments` (strict incident->problem->Jira flow support files)
 
 ## Field Set for Search and Fetch
 
@@ -172,6 +199,11 @@ The default issue field projection:
 - Do not perform write operations when auth validation fails
 - Do not send empty JQL, empty comments, or empty issue updates
 - Do not assume Jira writeable fields beyond those explicitly requested
+- Never enrich issue `summary`, `description`, or comments with internal flow-execution details (flow/run
+  identifiers, content-fingerprint hashes, checkpoint names, internal reason codes) from any calling
+  automation. Keep that telemetry solely in the calling agent's own structured result payload; only
+  human/business-facing content and legitimate structural references (issue keys, INC/PRB numbers)
+  belong in issue text.
 
 ## Python Implementation
 
@@ -186,3 +218,4 @@ Core methods:
 - `update_issue(...)`
 - `add_comment(...)`
 - `link_issues(...)`
+- `add_attachment(...)` — strict incident->problem->Jira flow support-file propagation

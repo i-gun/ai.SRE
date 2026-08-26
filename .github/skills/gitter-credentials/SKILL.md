@@ -22,6 +22,30 @@ This skill provides secure, profile-aware credential management for:
 - If a new artifact is needed, extend the smallest existing one or make it promotion-ready with configurable inputs, minimal dependencies, clear logging/error handling, and a usage example.
 - Avoid duplicate tooling and propagate any reusable change to relevant agents, prompts, skills, and docs.
 
+## Prerequisites
+
+| Tool | Required for | Install | Verify |
+|---|---|---|---|
+| `git` | All Gitter operations | Usually preinstalled | `git --version` |
+| **GitHub CLI (`gh`)** | Pull Request workflow (create/checks/merge) on protected branches — see [gitter-pull-request.prompt.md](../../prompts/gitter-pull-request.prompt.md) | `winget install --id GitHub.cli` (Windows), `brew install gh` (macOS), or https://cli.github.com/ | `gh --version` |
+| `GITHUB_PR_TOKEN` in `.env` | `gh` authentication for PR operations, exported as `GH_TOKEN` per invocation (non-interactive, not persisted via `gh auth login`) | Fine-grained PAT: `Contents: Read/write` + `Pull requests: Read/write` on this repo only | `gh auth status` (after exporting) |
+
+`gh` is the promoted tool for all GitHub-side operations (PR create/status/merge) — Gitter does not
+call the raw GitHub REST/GraphQL API for these. Without `gh` installed or without `GITHUB_PR_TOKEN`
+set, the Pull Request Workflow prompt stops at its precondition check and reports
+`gh_cli_unavailable` / `gh_token_missing`; the local sync prompt (commit/push to a feature branch)
+does not require `gh` and still works.
+
+### Two-token separation (do not conflate)
+
+| Variable | Purpose | Scope | Frequency of use |
+|---|---|---|---|
+| `GITHUB_TOKEN` | Administrative/one-off operations (e.g. configuring branch protection via direct API call) | Broad (e.g. `Administration: Read/write`) | Rare, admin-initiated |
+| `GITHUB_PR_TOKEN` | Routine `gh` CLI Pull Request operations (create/checks/merge) | Narrow (`Contents` + `Pull requests: Read/write` only — no `Administration`) | Frequent, every PR |
+
+Never substitute one for the other. Keeping `GITHUB_PR_TOKEN` narrowly scoped limits blast radius
+for the token that's used most often and passed to `gh` on every PR workflow invocation.
+
 ## When to Use This Skill
 
 - User initializes a new repository and needs credential setup

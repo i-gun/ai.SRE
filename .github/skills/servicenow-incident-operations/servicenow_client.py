@@ -110,6 +110,7 @@ class ServiceNowClient:
     # 'Create Issue' on a Problem form creates a problem_task record (PTASK prefix).
     # The /api/now/table/issue endpoint does not exist on this instance.
     PROBLEM_TASK_TABLE_PATH = "/api/now/table/problem_task"
+    ATTACHMENT_TABLE_PATH = "/api/now/attachment"
     SUPPORTED_ROUTING_PROJECTS = {"DDL", "ODPT"}
 
     # Common field names observed in ServiceNow Jira integration variants.
@@ -910,6 +911,79 @@ class ServiceNowClient:
             "problem": created_problem,
             "incident": updated_incident,
         }
+
+    def update_problem_fields(
+        self,
+        *,
+        problem_sys_id: str,
+        fields: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Patch arbitrary problem fields by sys_id.
+
+        Additive helper only; does not alter create_problem_from_incident's payload
+        or behavior, so existing CVE/secrets create flows are unaffected. Used by the
+        strict incident->problem->Jira flow to backfill linkage fields (for example
+        first_reported_by_task) that are not part of the base create payload.
+        """
+        if not problem_sys_id or not problem_sys_id.strip():
+            raise ServiceNowValidationError("problem_sys_id is required.")
+
+        payload = {
+            key: value
+            for key, value in (fields or {}).items()
+            if value is not None
+        }
+        if not payload:
+            raise ServiceNowValidationError("fields must contain at least one non-null value")
+
+        result = self._request(
+            "PATCH",
+            f"{self.PROBLEM_TABLE_PATH}/{problem_sys_id.strip()}",
+            json=payload,
+            params={
+                "sysparm_input_display_value": "true",
+                "sysparm_display_value": "true",
+                "sysparm_exclude_reference_link": "true",
+            },
+        )
+        return result.get("result", {})
+
+    def list_incident_attachments(self, *, incident_sys_id: str) -> List[Dict[str, Any]]:
+        """List attachment metadata for an incident (sys_attachment records, no file bytes)."""
+        if not incident_sys_id or not incident_sys_id.strip():
+            raise ServiceNowValidationError("incident_sys_id is required to list attachments.")
+
+        result = self._request(
+            "GET",
+            self.ATTACHMENT_TABLE_PATH,
+            params={
+                "sysparm_query": f"table_name=incident^table_sys_id={incident_sys_id.strip()}",
+            },
+        )
+        attachments = result.get("result", [])
+        return attachments if isinstance(attachments, list) else []
+
+    def download_attachment(self, *, attachment_sys_id: str) -> bytes:
+        """Download raw bytes for a single incident attachment by its sys_id."""
+        if not attachment_sys_id or not attachment_sys_id.strip():
+            raise ServiceNowValidationError("attachment_sys_id is required to download an attachment.")
+
+        try:
+            response = self.session.request(
+                method="GET",
+                url=self._url(f"{self.ATTACHMENT_TABLE_PATH}/{attachment_sys_id.strip()}/file"),
+                timeout=self.DEFAULT_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as exc:
+            raise ServiceNowAPIError(f"ServiceNow attachment download failed: {exc}") from exc
+
+        if response.status_code >= 400:
+            detail = self._safe_error_detail(response)
+            raise ServiceNowAPIError(
+                f"ServiceNow attachment download error ({response.status_code}): {detail}"
+            )
+
+        return response.content
 
     def create_issue_from_problem(
         self,
