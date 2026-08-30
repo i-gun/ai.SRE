@@ -76,11 +76,25 @@ STRICT EXECUTION POLICY:
 6) Merge (human-confirmed only):
 	- Only after checks=success AND reviewDecision=APPROVED, present the merge option to
 	  the user and require explicit confirmation before running
-	  `gh pr merge <pr-number> --squash` (or the method the user prefers).
+	  `gh pr merge <pr-number> --squash --delete-branch` (or the merge method the user
+	  prefers, always keeping `--delete-branch` so the remote feature branch — and the
+	  local one if currently checked out — is removed as part of the same call).
 	- NEVER use `--admin` to bypass required checks/reviews.
 	- NEVER auto-merge without an explicit human "yes" for this specific merge.
 
-7) Return strict result payload:
+7) Post-merge cleanup (only after merged=true; no additional confirmation needed —
+   covered by the merge confirmation in Step 6):
+	- `git switch <target-branch>` (e.g. `main`).
+	- `git pull origin <target-branch>` to bring the just-merged commit(s) into local state.
+	- Confirm the local feature branch is gone (`--delete-branch` should have removed it if
+	  it was checked out at merge time; if it still exists, run `git branch -d
+	  <feature-branch>` — safe delete only, never `-D`).
+	- Confirm the remote feature branch is gone: `git ls-remote --heads origin
+	  <feature-branch>` should return nothing.
+	- This guarantees the next sync starts from a clean, up-to-date base branch and will
+	  produce a brand-new feature branch rather than reusing/stacking on this one.
+
+8) Return strict result payload:
 	{
 	  "status": "success | pending_checks | pending_review | blocked | failed",
 	  "target_branch": "string",
@@ -95,6 +109,12 @@ STRICT EXECUTION POLICY:
 	  },
 	  "review_decision": "APPROVED | REVIEW_REQUIRED | CHANGES_REQUESTED | null",
 	  "merged": false,
+	  "post_merge_cleanup": {
+		 "switched_to": "string|null",
+		 "pulled": false,
+		 "local_branch_deleted": false,
+		 "remote_branch_deleted": false
+	  },
 	  "failure_reason": "string|null",
 	  "next_action": "string|null"
 	}
@@ -105,7 +125,8 @@ DECISION RULES:
 - If checks passed but review missing: status=pending_review, next_action="request review".
 - If any required check failed: status=blocked, failure_reason lists failing check names,
   next_action="fix and push additional commits to the same feature branch".
-- Only return status=success after an explicit, human-confirmed merge succeeds.
+- Only return status=success after an explicit, human-confirmed merge succeeds AND
+  post-merge cleanup (Step 7) has completed.
 ```
 
 ## Why this exists
@@ -117,6 +138,23 @@ for admins). This prompt assumes that protection is configured and focuses on gu
 contributors through the compliant path plus verifying the CI/review gate before advising
 a merge. Use `scripts/gitter/verify_branch_protection.py` periodically to confirm the
 GitHub-side protection has not drifted.
+
+## One PR in Flight (No Stacked Branches)
+
+Gitter never creates a second feature branch stacked on top of another branch that still
+has an open, unmerged PR. Stacked branches would require rebasing the dependent branch
+onto its parent's post-merge state and force-pushing to update it — which conflicts
+directly with the hard "never force-push / never rewrite shared history" rule in
+`gitter.agent.md`. Instead:
+- While a PR from this branch is still OPEN, additional changes are pushed as new commits
+  to the *same* branch/PR (handled by `gitter-repository-sync`'s Step 1b) — no new branch,
+  no new PR.
+- A new feature branch is only created once this branch's PR is MERGED (via this prompt's
+  Step 7 cleanup, or — if the PR was merged externally/behind the scenes without this
+  prompt — via `gitter-repository-sync`'s Step 1b cleanup-and-reroute path) or the PR is
+  explicitly abandoned by the user.
+- This keeps exactly one feature branch, and at most one open PR, active per line of work
+  at any time — simple to audit, no rebase cascades, no force-push exceptions needed.
 
 ## Usage Example
 
@@ -136,6 +174,14 @@ GitHub-side protection has not drifted.
 - Cause: branch protection required-checks list doesn't match the workflow job name.
 - Action: verify [python-tests.yml](../workflows/python-tests.yml) job name matches the
   required check configured in branch protection settings.
+
+2a. PR was merged externally (by a reviewer, or outside this session) before this prompt's
+    own Step 7 cleanup ran:
+- Cause: merge happened "behind the scenes" — this session never reached Step 6/7.
+- Action: no action needed here. The next invocation of `gitter-repository-sync` on this
+  branch detects the branch's PR is MERGED (Step 1b), performs the same cleanup (switch to
+  base, pull, delete local+remote branch), and reroutes any pending new changes onto a
+  fresh branch automatically.
 
 3. `gh pr merge` rejected:
 - Cause: checks pending/failed, or missing approvals, or branch protection blocks it.
