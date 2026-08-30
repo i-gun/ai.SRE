@@ -12,6 +12,12 @@ Direct commits/pushes to protected branches are never permitted — this prompt 
 sanctioned path onto them, and it relies on the `gh` CLI (promoted tool) rather than raw
 GitHub API scripting.
 
+**Automatic entry point**: `gitter-repository-sync.prompt.md` Step 1a (and its Step 1b
+reroute path) automatically chains into this prompt right after pushing a routed feature
+branch — no manual re-invocation is required to reach PR creation, check polling, and
+review polling. The one thing that never happens automatically, from either entry point,
+is the merge in Step 6: it always requires an explicit human confirmation.
+
 Reuse-first policy:
 - Use the `gh` CLI for all GitHub-side operations (PR create/status/merge). Do not write
   custom scripts against the GitHub REST/GraphQL API for this workflow.

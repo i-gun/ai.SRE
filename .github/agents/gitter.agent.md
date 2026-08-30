@@ -77,6 +77,7 @@ Present recommendations organized by:
 - Repository history analysis and optimization
 - Team collaboration workflows and code review integration
 - Pull Request lifecycle management (`gh` CLI: create, checks, review status, merge, post-merge branch cleanup) as the required path onto protected branches
+- Auto-chained handoff: the repo-sync prompt automatically invokes the Pull Request workflow prompt after routing/pushing a protected-branch change, so PR create/checks/review polling run without a manual re-prompt; merge itself always stops at an explicit human confirmation
 - One-PR-in-flight branch discipline: reuse an existing branch/PR for follow-up commits instead of stacking a new branch on top of an unmerged one
 - Integration with CI/CD pipelines and deployment workflows
 - Release management and version tagging strategies
