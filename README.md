@@ -30,6 +30,7 @@ Always use agent delegation (`@AgentName`) rather than creating custom scripts:
 @AzureGit, [operation description]
 @NewRelic, [operation description]
 @RCA, [incident identifier or description]
+@Emailer, [operation description]
 ```
 
 Agents automatically handle credential loading, validation, and error handling.
@@ -69,6 +70,7 @@ This generates the same three files under `data/`.
 │   │   ├── advisor.agent.md
 │   │   ├── azuregit.agent.md
 │   │   ├── confluence.agent.md
+│   │   ├── emailer.agent.md
 │   │   ├── gitter.agent.md
 │   │   ├── jira.agent.md
 │   │   ├── newrelic.agent.md
@@ -145,6 +147,13 @@ This generates the same three files under `data/`.
 │           └── SKILL.md
 │       └── rca-report-authoring/
 │           └── SKILL.md
+│       └── emailer-connection/
+│           ├── SKILL.md
+│           └── outlook_env.py
+│       └── emailer-mail-operations/
+│           ├── SKILL.md
+│           ├── README.md
+│           └── outlook_client.py
 ├── docs/                    # Project and implementation documentation
 │   ├── GIT_HOOKS_IMPLEMENTATION.md
 │   ├── GITTER_CREDENTIALS_SKILL_SUMMARY.md
@@ -224,6 +233,9 @@ New Relic observability agent for log search, trend analysis, dependency travers
 ### RCA Agent
 Elite RCA Orchestrator for end-to-end, evidence-driven root cause analysis. Correlates New Relic observability, ServiceNow incidents, Jira work tracking, Confluence knowledge, and AzureGit source attribution into a defensible RCA package. Requires explicit `APPROVE_RUN_RCA` command to begin execution. Use the [rca-intake prompt](.github/prompts/rca-intake.prompt.md) to initiate an investigation.
 
+### Emailer Agent
+Local mail integration agent operating against the already-authenticated Outlook desktop client via Windows COM automation. Centralizes redaction-aware, recipient-governed draft composition and recursive inbox/folder reading using non-secret `.env` configuration.
+
 ## Skills
 
 ### Gitter Credentials Skill
@@ -288,6 +300,12 @@ Produces structured chart data, error volume trend tables, latency overlays, inc
 
 ### RCA Report Authoring Skill
 Assembles the complete, structured RCA markdown document from all stream outputs, including executive summary, technical timeline, evidence matrix, code attribution pack, corrective actions, and validation plan.
+
+### Emailer Connection Skill
+Validates the local Outlook desktop COM connection and normalizes non-secret `.env` configuration (mailbox address, watched folders, recipient allowlist, send mode, redaction ruleset path).
+
+### Emailer Mail Operations Skill
+Redaction-aware draft-for-review composition and recursive inbox/folder reading against the validated local Outlook session, with fail-closed recipient domain allowlisting.
 
 ### Confluence Scripts & Tests
 - Helper scripts in `scripts/confluence/` support page browsing, CQL search, and service-flow graph generation.
@@ -379,5 +397,27 @@ This section is automatically maintained by pre-commit hooks.
 - `.github/skills/servicenow-incident-operations/servicenow_client.py` - 76 line changes
 - `.github/workflows/python-tests.yml` - 8 line changes
 - `docs/GITTER_CREDENTIALS_SKILL_SUMMARY.md` - 3 line changes
+
+
+
+## Recent Changes
+
+**Updated: 2026-08-30 16:21:08**
+
+**New Files Added** (9):
+- `.github/agents/emailer.agent.md` - Documentation
+- `.github/skills/emailer-connection/SKILL.md` - Documentation
+- `.github/skills/emailer-connection/outlook_env.py` - Python implementation
+- `.github/skills/emailer-mail-operations/README.md` - Documentation
+- `.github/skills/emailer-mail-operations/SKILL.md` - Documentation
+- `.github/skills/emailer-mail-operations/outlook_client.py` - Python implementation
+- `scripts/emailer/build_folder_map.py` - Python implementation
+- `scripts/emailer/redaction_rules.json`
+- `scripts/emailer/send_test_email.py` - Python implementation
+
+**Files Modified** (3):
+- `.env.example` - 9 line changes
+- `README.md` - 20 line changes
+- `requirements.txt` - 3 line changes
 
 
