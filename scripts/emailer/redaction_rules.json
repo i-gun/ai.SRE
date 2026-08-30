@@ -1,0 +1,13 @@
+{
+  "description": "Redaction patterns applied to Emailer message bodies before draft creation. Extend cautiously; prefer adding patterns over loosening existing ones.",
+  "patterns": [
+    { "name": "aws_access_key", "regex": "AKIA[0-9A-Z]{16}", "replacement": "[REDACTED_AWS_ACCESS_KEY]" },
+    { "name": "generic_api_key_assignment", "regex": "(?i)(api[_-]?key|apikey)\\s*[:=]\\s*['\"]?[A-Za-z0-9_\\-]{16,}", "replacement": "[REDACTED_API_KEY]" },
+    { "name": "bearer_token", "regex": "(?i)bearer\\s+[A-Za-z0-9\\-_.]{20,}", "replacement": "Bearer [REDACTED_TOKEN]" },
+    { "name": "jwt_token", "regex": "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+", "replacement": "[REDACTED_JWT]" },
+    { "name": "password_assignment", "regex": "(?i)(password|passwd|pwd)\\s*[:=]\\s*['\"]?[^\\s'\"]{6,}", "replacement": "[REDACTED_PASSWORD]" },
+    { "name": "client_secret_assignment", "regex": "(?i)(client[_-]?secret)\\s*[:=]\\s*['\"]?[A-Za-z0-9_\\-~.]{8,}", "replacement": "[REDACTED_CLIENT_SECRET]" },
+    { "name": "connection_string", "regex": "(?i)(Server|Data Source)=.*?;.*?(Password|Pwd)=.*?(;|$)", "replacement": "[REDACTED_CONNECTION_STRING]" },
+    { "name": "pat_like_token", "regex": "(?i)(pat|personal[_-]?access[_-]?token)\\s*[:=]\\s*['\"]?[A-Za-z0-9_\\-]{20,}", "replacement": "[REDACTED_PAT]" }
+  ]
+}
