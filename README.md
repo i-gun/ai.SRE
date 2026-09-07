@@ -29,6 +29,7 @@ Always use agent delegation (`@AgentName`) rather than creating custom scripts:
 @Confluence, [operation description]
 @AzureGit, [operation description]
 @NewRelic, [operation description]
+@Dynatrace, [operation description]
 @RCA, [incident identifier or description]
 @Emailer, [operation description]
 ```
@@ -54,6 +55,7 @@ This generates the same three files under `data/`.
 
 ### Development & Governance
 - **Integration Governance** — See [INTEGRATION_GOVERNANCE.md](docs/INTEGRATION_GOVERNANCE.md) for credential handling, script placement, and best practices
+- **Agent Capabilities** — See [AGENT_CAPABILITIES.md](docs/AGENT_CAPABILITIES.md) for the current agent catalog, skills, scopes, and operational constraints
 - **Hook Setup** — See [GIT_HOOKS_IMPLEMENTATION.md](docs/GIT_HOOKS_IMPLEMENTATION.md) for automated documentation and formatting
 - **Repository Mapping (Primary)** — [COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md](docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md) is the canonical combined view (AzureGit + Confluence + Jira label signal run).
 - **Repository Mapping (Supporting)**
@@ -230,6 +232,9 @@ Azure DevOps Git read-only operations agent for scoped multi-project repository 
 ### NewRelic Agent
 New Relic observability agent for log search, trend analysis, dependency traversal, automated root cause analysis, and alert acknowledgment across configured accounts using `.env` credentials. Primary account: CTC Production `1679802`.
 
+### Dynatrace Agent
+Dynatrace observability intelligence agent for single-environment Grail/DQL log search, anomaly trends, Smartscape service dependency traversal, and Davis AI evidence-led problem investigation. It can post an audit-trail acknowledgment comment with explicit user intent; it never changes a problem's status.
+
 ### RCA Agent
 Elite RCA Orchestrator for end-to-end, evidence-driven root cause analysis. Correlates New Relic observability, ServiceNow incidents, Jira work tracking, Confluence knowledge, and AzureGit source attribution into a defensible RCA package. Requires explicit `APPROVE_RUN_RCA` command to begin execution. Use the [rca-intake prompt](.github/prompts/rca-intake.prompt.md) to initiate an investigation.
 
@@ -273,6 +278,15 @@ Fetch open unacknowledged New Relic issues scoped to account `1679802` and polic
 
 ### NewRelic Log Operations Skill
 New Relic log search, trend analysis, pod restart checking, JWT/auth anomaly detection, dependency traversal, and automated RCA scoring across configured accounts.
+
+### Dynatrace Authentication Skill
+Validates the Dynatrace environment URL, API token, and comment attribution username loaded from `.env`; credentials are never emitted in user-facing output or generated artifacts.
+
+### Dynatrace Monitoring Operations Skill
+Provides scoped Grail/DQL log search and trend analysis, Smartscape dependency traversal, and root-cause analysis that prioritizes native Davis AI evidence before bounded fallback log-pattern analysis.
+
+### Dynatrace Problem Operations Skill
+Searches and retrieves Dynatrace Problems v2 records and posts audit-trail comments. Dynatrace does not offer an acknowledgment status mutation, so comments always leave the problem's `OPEN` or `CLOSED` state unchanged.
 
 ### RCA Log Forensics Skill
 Multi-account New Relic log forensics for deep error collection, burst detection, novelty scoring, pod restart analysis, JWT/auth anomaly detection, and pre/post-incident trend comparison.
@@ -470,5 +484,17 @@ This section is automatically maintained by pre-commit hooks.
 - `.env.example` - 10 line changes
 - `.env.template` - 42 line changes
 - `docs/INTEGRATION_GOVERNANCE.md` - 91 line changes
+
+
+
+## Recent Changes
+
+**Updated: 2026-09-07 14:27:37**
+
+**New Files Added** (1):
+- `docs/AGENT_CAPABILITIES.md` - Documentation
+
+**Files Modified** (1):
+- `README.md` - 16 line changes
 
 
