@@ -452,3 +452,23 @@ This section is automatically maintained by pre-commit hooks.
 - `.github/prompts/gitter-repository-sync.prompt.md` - 25 line changes
 
 
+
+## Recent Changes
+
+**Updated: 2026-09-07 14:06:03**
+
+**New Files Added** (7):
+- `.github/agents/dynatrace.agent.md` - Documentation
+- `.github/skills/dynatrace-authentication/SKILL.md` - Documentation
+- `.github/skills/dynatrace-authentication/dynatrace_env.py` - Python implementation
+- `.github/skills/dynatrace-monitoring-operations/SKILL.md` - Documentation
+- `.github/skills/dynatrace-monitoring-operations/dynatrace_client.py` - Python implementation
+- `.github/skills/dynatrace-problem-operations/SKILL.md` - Documentation
+- `.github/skills/dynatrace-problem-operations/dynatrace_problems_client.py` - Python implementation
+
+**Files Modified** (3):
+- `.env.example` - 10 line changes
+- `.env.template` - 42 line changes
+- `docs/INTEGRATION_GOVERNANCE.md` - 91 line changes
+
+
