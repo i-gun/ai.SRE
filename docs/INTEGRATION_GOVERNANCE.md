@@ -286,6 +286,95 @@ artifacts/servicenow/archive/test_connection.py
 - Review archived scripts during adjacent cleanup work and remove entries that are no longer referenced by docs, tickets, or active runbooks.
 - Do not promote archived scripts back into `scripts/` without parameterization, documentation, and explicit execution gates.
 
+## Corporate TLS Interception (SSL Decryption) — Team Device Setup
+
+Several integrations (e.g. `@Dynatrace` against a Managed/SAP-hosted cluster URL) sit behind
+Canadian Tire's corporate SSL-decryption proxy. Python's `requests`/`urllib3` stack does **not**
+use the Windows certificate store — it only trusts its bundled `certifi` CA list — so a request
+can fail with `SSLError: CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate` even
+when the same URL loads fine in a browser (which uses the OS store, or already cached the
+missing intermediate).
+
+### Resolved — working CA bundle (confirmed 2026-09-07)
+
+A working combined CA bundle (certifi's public CA list + Canadian Tire's SSL-decryption chain)
+is available at **`certs/CTE_SSLDECRYPTION_SUBCA_2028.pem`**. It is gitignored (matches the
+repo's blanket `*.pem` rule) — each device must obtain it independently; it is not distributed
+via version control.
+
+**Setup on a new device:**
+1. Place a verified copy of the bundle at `certs/CTE_SSLDECRYPTION_SUBCA_2028.pem` (create the
+   `certs/` folder if absent).
+2. Add to your local `.env`:
+   ```
+   REQUESTS_CA_BUNDLE=certs/CTE_SSLDECRYPTION_SUBCA_2028.pem
+   ```
+3. No code changes are required — `requests`/`urllib3` read `REQUESTS_CA_BUNDLE` from the
+   environment automatically for any `verify=True` (default) call, including the `@Dynatrace`
+   agent's client.
+4. Verify with `@Dynatrace, verify connection to the live platform` — expect a clean pass with
+   no certificate errors and no `verify=False` bypass.
+
+**Do not treat `certs/` as disposable "regenerate on demand" data** the way `data/` files are
+treated — this is trust-anchor material, not a cache. If the bundle needs replacing (e.g. after
+a proxy CA rotation), repeat the diagnosis steps below to obtain a fresh copy, don't assume the
+old one still resolves.
+
+### Confirmed root cause (validated 2026-09-07)
+
+The proxy issues leaf certificates signed by:
+```
+CN=CTE_SSLDECRYPTION_SUBCA_2028, OU=NSA, O=Canadian Tire Corporation Limited, L=Toronto, S=Ontario, C=CA
+```
+On an affected device, this sub-CA (and its root) may be **entirely absent** from the Windows
+certificate stores (`Cert:\LocalMachine\Root`, `Cert:\LocalMachine\CA`), not just missing from
+Python's trust bundle. This was confirmed via `System.Security.Cryptography.X509Certificates.X509Chain`,
+which returned `ChainBuildResult: False` / `PartialChain` — meaning the OS itself does not have a
+full trust path either, independent of Python.
+
+**Do not confuse this with unrelated enterprise root CAs that may already be installed for other
+tooling** (e.g. an `EPAm Root Enterprise CA` used for a different vendor's endpoints) — verify the
+actual issuer of the failing host's leaf certificate before assuming any locally present CA will fix it.
+
+### Diagnosis steps (reusable for any future TLS failure on a new host)
+
+1. Identify the actual issuing CA of the failing host, don't guess:
+   ```powershell
+   $h = "<failing-host>"
+   $tcp = New-Object System.Net.Sockets.TcpClient($h, 443)
+   $ssl = New-Object System.Net.Security.SslStream($tcp.GetStream(), $false, ({ $true }))
+   $ssl.AuthenticateAsClient($h)
+   $chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain
+   $chain.ChainPolicy.RevocationMode = [System.Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+   $built = $chain.Build($ssl.RemoteCertificate)
+   Write-Host ("ChainBuildResult: " + $built)
+   foreach ($el in $chain.ChainElements) { Write-Host ("SUBJECT: " + $el.Certificate.Subject); Write-Host ("ISSUER: " + $el.Certificate.Issuer) }
+   foreach ($status in $chain.ChainStatus) { Write-Host ("StatusFlag: " + $status.Status + " - " + $status.StatusInformation) }
+   $ssl.Close(); $tcp.Close()
+   ```
+2. Search the local trust stores for that exact issuer CN (not just "any corporate-looking CA"):
+   ```powershell
+   Get-ChildItem -Path Cert:\LocalMachine\Root,Cert:\LocalMachine\CA,Cert:\CurrentUser\Root,Cert:\CurrentUser\CA -Recurse |
+     Where-Object { $_.Subject -match "<issuer CN substring>" } | Select-Object PSParentPath, Subject, Thumbprint, NotAfter
+   ```
+3. If `ChainBuildResult` is `False`/`PartialChain` and the issuer isn't found, the device is missing
+   the corporate CA — this is an IT/Security provisioning gap, not something to work around locally.
+
+### Required remediation (must go through IT/Security — do not self-issue a substitute)
+
+- Request installation/GPO re-sync of `CTE_SSLDECRYPTION_SUBCA_2028` (and its root) into the
+  Windows Trusted Root/Intermediate CA stores on the affected device.
+- Once installed in Windows, either:
+  - Re-run the affected integration directly (if it relies on OS trust via `truststore` or similar), or
+  - Export the CA chain to a `.pem` and set `REQUESTS_CA_BUNDLE` (or `SSL_CERT_FILE`) to a bundle
+    combining it with `certifi`'s default list, since `requests`/`urllib3` ignore the OS store.
+- **Do not** disable certificate verification (`verify=False`) as a permanent fix. It is acceptable
+  **only** as a single, clearly-labeled, ad-hoc diagnostic call to confirm credentials/endpoint
+  correctness while the real CA install is pending — never as standing configuration, and never
+  committed into client code.
+- **Do not** substitute an unrelated locally-present enterprise CA (e.g. from a different vendor
+  tool) — confirm the actual issuer per the diagnosis steps above before trusting any bundle.
+
 ### Example 3: Coordinated Service Discovery Across AzureGit & Confluence
 
 **Problem:** Analyze NewRelic APM services to understand repository mapping and documentation coverage.
