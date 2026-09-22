@@ -36,6 +36,7 @@ DDL_PRIORITY = "Major"
 DDL_COMPONENT = "Azure"
 DDL_TEAM = "Site Reliability Engineering"
 DDL_TARGET_STATUS = "Ready for QA"
+DDL_INTERMEDIATE_STATUSES = ["Analysis", "In Progress"]
 BET_TEAM = "[Daas] Operational Squad"
 BET_LABELS = ["DaaS", "collector-ad5a51d7"]
 RELEASE_CALENDAR_PAGE_ID = "80217385"
@@ -210,6 +211,36 @@ def build_fields(client: JiraClient, current_release: str, upcoming_release: str
 
 
 def transition_to_target_status(client: JiraClient, issue_key: str, target_status: str) -> str:
+    attempted: List[str] = []
+
+    def _transition_once(destination: str) -> bool:
+        issue = client._request("GET", f"/rest/api/3/issue/{issue_key}", params={"fields": "status"})
+        current_status = str(((issue.get("fields") or {}).get("status") or {}).get("name") or "").strip()
+        if current_status.lower() == destination.lower():
+            return True
+
+        transition_data = client._request("GET", f"/rest/api/3/issue/{issue_key}/transitions")
+        transitions = transition_data.get("transitions") or []
+        transition = next(
+            (
+                item for item in transitions
+                if str((item.get("to") or {}).get("name") or "").strip().lower() == destination.lower()
+            ),
+            None,
+        )
+        transition_id = str((transition or {}).get("id") or "").strip()
+        if not transition_id:
+            attempted.append(f"{current_status or 'unknown'} -> {destination}")
+            return False
+
+        client._request(
+            "POST",
+            f"/rest/api/3/issue/{issue_key}/transitions",
+            json={"transition": {"id": transition_id}},
+        )
+        attempted.append(f"{current_status or 'unknown'} -> {destination}")
+        return True
+
     issue = client._request("GET", f"/rest/api/3/issue/{issue_key}", params={"fields": "status"})
     current_status = str(((issue.get("fields") or {}).get("status") or {}).get("name") or "").strip()
     if current_status.lower() == target_status.lower():
@@ -226,8 +257,11 @@ def transition_to_target_status(client: JiraClient, issue_key: str, target_statu
     )
     transition_id = str((transition or {}).get("id") or "").strip()
     if not transition_id:
+        for intermediate_status in DDL_INTERMEDIATE_STATUSES:
+            if _transition_once(intermediate_status) and _transition_once(target_status):
+                return "transitioned_via_" + intermediate_status.replace(" ", "_").lower()
         raise JiraValidationError(
-            f"DDL issue {issue_key} cannot transition from '{current_status or 'unknown'}' to '{target_status}'."
+            f"DDL issue {issue_key} cannot transition to '{target_status}'. Attempted: {', '.join(attempted)}."
         )
 
     client._request(
