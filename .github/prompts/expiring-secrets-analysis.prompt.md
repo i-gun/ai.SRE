@@ -16,6 +16,14 @@ Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.
 - Avoid duplicate tooling and consolidate overlap into the maintained artifact.
 
+Secret-name exclusion policy:
+- Exclude secrets whose `objectName` contains any of these case-insensitive patterns:
+  `subscription-key`, `spn-object-id`, or `spn-client-id`.
+- Apply this filter immediately after Phase 1 collection, before suppression handling and
+  before dispatching any Jira, ServiceNow, or Confluence lookup.
+- Excluded secrets must not appear in `impact_matrix`, `resolution_matrix`, approval gates,
+  or any final artifact. Report the excluded names and count as an exception.
+
 ```text
 Execution model: 4 phases. Phases 1 and 3-4 are serial. Phase 2 dispatches @NewRelic, @ServiceNow,
 @Jira, and @Confluence simultaneously — do not wait for one before starting the others.
@@ -38,6 +46,10 @@ Use the promoted core script to collect expiring Key Vault secrets for Digital b
 
 The script queries account 1679802 (CTC Production) and returns rows faceted by secret name,
 vault name, and event type. Classify by daysUntilExpiry into urgency tiers (moderate/urgent/critical).
+
+Before processing the returned rows, exclude every secret whose `objectName` contains one of
+the case-insensitive exclusion patterns above. Do not perform NEW_VERSION_CREATED checks or
+any downstream lookup for excluded secrets.
 
 Filter out secrets with recent SecretNewVersionCreated events:
 - For each secret identified as (vaultName, objectName) with days_remaining status:
@@ -206,7 +218,8 @@ Sections:
    with this artifact path. It will re-validate freshness and require explicit confirmation before any write."
 
 Success criteria:
-- Every discovered (vaultName, objectName) with expiration represented in resolution_matrix
+- Every discovered non-excluded (vaultName, objectName) with expiration represented in resolution_matrix
+- Every secret matching the name exclusion policy reported as excluded and absent from all downstream artifacts
 - Every tuple has exactly one resolved classification
 - Secrets with recent NEW_VERSION_CREATED events excluded from output (suppressed)
 - resolution_matrix artifact passes `resolution_matrix.py validate`

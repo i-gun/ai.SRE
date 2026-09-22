@@ -14,6 +14,15 @@ and supply (or accept the auto-discovered latest) `resolution_matrix` artifact p
 This flow performs writes and therefore defaults to a hard stop before any create/repair
 action until the operator explicitly confirms.
 
+Secret-name exclusion policy:
+- Treat the analysis exclusion policy as authoritative and apply it again defensively at
+  execution time, case-insensitively, to each row's `objectName`.
+- Exclude any row whose `objectName` contains `subscription-key`, `spn-object-id`, or
+  `spn-client-id`.
+- Excluded rows must be removed from live re-checks, approval gates, and all write actions;
+  report them as `excluded_by_secret_name_policy`. Do not create or repair any artifact for
+  an excluded row, even if it is present in the supplied resolution matrix.
+
 ```text
 Inputs:
 - --resolution-matrix-path (optional). If omitted, use the latest artifact for domain=secrets:
@@ -41,6 +50,10 @@ If is_stale = true:
 - Report the reasons (age exceeded, or row content no longer matches source_data_fingerprint —
   possible tampering/corruption).
 - STOP. Do not proceed to Step 3. Instruct operator to re-run expiring-secrets-analysis.prompt.md.
+
+Before Step 3, apply the case-insensitive secret-name exclusion policy to every matrix row.
+Remove matching rows from the execution set and report their object names under
+`excluded_by_secret_name_policy`; do not re-check or write them.
 
 ━━━ STEP 3 — Lightweight Live Re-Check [serial, only rows classified repair_needed or needs_full_creation] ━━━
 
@@ -152,6 +165,7 @@ Sections:
 
 Success criteria:
 - No writes occurred before explicit Step 4 confirmation
+- Secrets matching the name exclusion policy were reported as excluded and received no live re-check or write
 - No row executed with age past its tier's --max-age-hours threshold
 - Every write result (created or reused ID) captured immediately, not only at report time
 - Rows reclassified or suppressed during Step 3 were not executed against their stale Step-1 classification
