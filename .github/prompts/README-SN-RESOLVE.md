@@ -1,6 +1,6 @@
-# Prompt Pack: ServiceNow Incident Resolution
+# Skill Pack: ServiceNow Incident Resolution
 
-This prompt pack contains reusable ServiceNow resolution prompts for targeted incident classes with strict non-resolved filtering and standardized closure fields.
+This skill pack links to reusable ServiceNow workflows for targeted incident classes with strict non-resolved filtering and standardized closure fields.
 
 ## Reuse-First Policy
 
@@ -8,14 +8,14 @@ This prompt pack contains reusable ServiceNow resolution prompts for targeted in
 - If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
 - Avoid duplicate tooling and consolidate overlap into the maintained artifact.
 
-Files:
-- [.github/prompts/servicenow-resolve-incident-strict.prompt.md](.github/prompts/servicenow-resolve-incident-strict.prompt.md)
+Skills:
+- [servicenow-resolve-incident-strict](../skills/servicenow-resolve-incident-strict/SKILL.md)
   Resolve a single incident with required input gates (incident number, resolution code, resolution notes) and optional linkage fields.
-- [.github/prompts/servicenow-resolve-gigya-incidents.prompt.md](.github/prompts/servicenow-resolve-gigya-incidents.prompt.md)
+- [servicenow-resolve-gigya-incidents](../skills/servicenow-resolve-gigya-incidents/SKILL.md)
   Resolve active non-resolved Gigya incidents in scoped assignment groups.
-- [.github/prompts/servicenow-resolve-rtcdp-incidents.prompt.md](.github/prompts/servicenow-resolve-rtcdp-incidents.prompt.md)
+- [servicenow-resolve-rtcdp-incidents](../skills/servicenow-resolve-rtcdp-incidents/SKILL.md)
   Resolve active non-resolved RTCDP incidents in scoped assignment groups.
-- [.github/prompts/servicenow-resolve-sfsc-incidents.prompt.md](.github/prompts/servicenow-resolve-sfsc-incidents.prompt.md)
+- [servicenow-resolve-sfsc-incidents](../skills/servicenow-resolve-sfsc-incidents/SKILL.md)
   Resolve active non-resolved SFSC incidents in scoped assignment groups.
 
 ## Invocation Examples

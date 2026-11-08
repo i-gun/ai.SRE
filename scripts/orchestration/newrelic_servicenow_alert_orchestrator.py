@@ -25,7 +25,13 @@ from bootstrap_shared import bootstrap_paths
 
 NEWRELIC_ALERT_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "newrelic-alert-operations"
 SERVICENOW_INCIDENT_SKILL_PATH = PROJECT_ROOT / ".github" / "skills" / "servicenow-incident-operations"
-ASSIGNMENT_PROMPT_PATH = PROJECT_ROOT / ".github" / "prompts" / "servicenow-assign-unassigned-incidents.prompt.md"
+ASSIGNMENT_SKILL_PATH = (
+    PROJECT_ROOT
+    / ".github"
+    / "skills"
+    / "servicenow-assign-unassigned-incidents"
+    / "SKILL.md"
+)
 
 
 @dataclass
@@ -233,7 +239,7 @@ class AlertToIncidentOrchestrator:
         return {
             "policy_name_starts_with": self.config.policy_name_starts_with,
             "since": self.config.since,
-            "assignment_prompt_reference": str(ASSIGNMENT_PROMPT_PATH),
+            "assignment_skill_reference": str(ASSIGNMENT_SKILL_PATH),
             "report": per_alert_report,
             "summary": {
                 "open_newrelic_alerts_acknowledged": acknowledged_count,

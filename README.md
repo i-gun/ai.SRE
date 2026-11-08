@@ -62,7 +62,7 @@ This generates the same three files under `data/`.
   - [AZUREGIT_REPOSITORY_MAPPING_REPORT.md](docs/AZUREGIT_REPOSITORY_MAPPING_REPORT.md) — Project/repository inventory snapshot (278 repos across 15 projects)
   - [SERVICE_REPOSITORY_MAPPING_REPORT.md](docs/SERVICE_REPOSITORY_MAPPING_REPORT.md) — AzureGit-focused service-to-repository baseline analysis
 - **Knowledge Mapping** — Run `@Confluence` agent to regenerate service documentation analysis. Current summary: 3.9% coverage, 124 services with documentation gaps. Cross-check with [COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md](docs/COMBINED_SERVICE_REPOSITORY_MAPPING_REPORT.md).
-- **ServiceNow Resolve Prompt Pack** — See [README-SN-RESOLVE.md](.github/prompts/README-SN-RESOLVE.md) for reusable Gigya, RTCDP, and SFSC incident resolution prompts
+- **ServiceNow Resolution Skill Pack** — See [README-SN-RESOLVE.md](.github/prompts/README-SN-RESOLVE.md) for reusable Gigya, RTCDP, and SFSC incident resolution workflows
 
 ## Project Structure
 
@@ -78,17 +78,17 @@ This generates the same three files under `data/`.
 │   │   ├── newrelic.agent.md
 │   │   ├── rca.agent.md
 │   │   └── servicenow.agent.md
-│   ├── prompts/             # Reusable prompt templates
-│   │   ├── rca-intake.prompt.md
-│   │   ├── rca-deep-investigation.prompt.md
-│   │   ├── rca-hypothesis-stress-test.prompt.md
-│   │   ├── rca-similar-incident-comparison.prompt.md
-│   │   ├── rca-azuregit-code-attribution.prompt.md
-│   │   ├── rca-final-report-assembly.prompt.md
-│   │   ├── rca-executive-summary.prompt.md
+│   ├── prompts/             # Archived prompt backups and workflow indexes
+│   │   ├── *.prompt.md.bak
 │   │   ├── README-SN-RESOLVE.md
 │   │   └── README-SN-PRB-Jira.md
 │   └── skills/              # Domain-specific skill implementations
+│       ├── rca-intake/
+│       │   └── SKILL.md
+│       ├── cve-impact-analysis/
+│       │   └── SKILL.md
+│       ├── servicenow-resolve-incident-strict/
+│       │   └── SKILL.md
 │       └── gitter-credentials/
 │           ├── SKILL.md
 │           ├── SETUP.md
@@ -236,7 +236,7 @@ New Relic observability agent for log search, trend analysis, dependency travers
 Dynatrace observability intelligence agent for single-environment Grail/DQL log search, anomaly trends, Smartscape service dependency traversal, and Davis AI evidence-led problem investigation. It can post an audit-trail acknowledgment comment with explicit user intent; it never changes a problem's status.
 
 ### RCA Agent
-Elite RCA Orchestrator for end-to-end, evidence-driven root cause analysis. Correlates New Relic observability, ServiceNow incidents, Jira work tracking, Confluence knowledge, and AzureGit source attribution into a defensible RCA package. Requires explicit `APPROVE_RUN_RCA` command to begin execution. Use the [rca-intake prompt](.github/prompts/rca-intake.prompt.md) to initiate an investigation.
+Elite RCA Orchestrator for end-to-end, evidence-driven root cause analysis. Correlates New Relic observability, ServiceNow incidents, Jira work tracking, Confluence knowledge, and AzureGit source attribution into a defensible RCA package. Requires explicit `APPROVE_RUN_RCA` command to begin execution. Use the [rca-intake skill](.github/skills/rca-intake/SKILL.md) to initiate an investigation.
 
 ### Emailer Agent
 Local mail integration agent operating against the already-authenticated Outlook desktop client via Windows COM automation. Centralizes redaction-aware, recipient-governed draft composition and recursive inbox/folder reading using non-secret `.env` configuration.
@@ -496,5 +496,49 @@ This section is automatically maintained by pre-commit hooks.
 
 **Files Modified** (1):
 - `README.md` - 16 line changes
+
+
+
+## Recent Changes
+
+**Updated: 2026-11-08 20:26:30**
+
+**New Files Added** (26):
+- `.github/skills/agent-handoff-result-schema/SKILL.md` - Documentation
+- `.github/skills/cve-impact-analysis/SKILL.md` - Documentation
+- `.github/skills/cve-impact-daily-operator/SKILL.md` - Documentation
+- `.github/skills/cve-impact-execute/SKILL.md` - Documentation
+- `.github/skills/expiring-secrets-analysis/SKILL.md` - Documentation
+- `.github/skills/expiring-secrets-daily-operator/SKILL.md` - Documentation
+- `.github/skills/expiring-secrets-execute/SKILL.md` - Documentation
+- `.github/skills/gitter-pull-request/SKILL.md` - Documentation
+- `.github/skills/gitter-repository-sync/SKILL.md` - Documentation
+- `.github/skills/jira-create-issue-from-servicenow-handoff/SKILL.md` - Documentation
+- `.github/skills/newrelic-servicenow-orchestrator-30m-odp/SKILL.md` - Documentation
+- `.github/skills/rca-azuregit-code-attribution/SKILL.md` - Documentation
+- `.github/skills/rca-deep-investigation/SKILL.md` - Documentation
+- `.github/skills/rca-executive-summary/SKILL.md` - Documentation
+- `.github/skills/rca-final-report-assembly/SKILL.md` - Documentation
+- `.github/skills/rca-hypothesis-stress-test/SKILL.md` - Documentation
+- `.github/skills/rca-intake/SKILL.md` - Documentation
+- `.github/skills/rca-similar-incident-comparison/SKILL.md` - Documentation
+- `.github/skills/servicenow-assign-unassigned-incidents/SKILL.md` - Documentation
+- `.github/skills/servicenow-finalize-incident-from-jira-result/SKILL.md` - Documentation
+- `.github/skills/servicenow-incident-to-prb-jira-strict/SKILL.md` - Documentation
+- `.github/skills/servicenow-raise-priority-strict/SKILL.md` - Documentation
+- `.github/skills/servicenow-resolve-gigya-incidents/SKILL.md` - Documentation
+- `.github/skills/servicenow-resolve-incident-strict/SKILL.md` - Documentation
+- `.github/skills/servicenow-resolve-rtcdp-incidents/SKILL.md` - Documentation
+- `.github/skills/servicenow-resolve-sfsc-incidents/SKILL.md` - Documentation
+
+**Files Modified** (8):
+- `.env.template` - 4 line changes
+- `.github/agents/servicenow.agent.md` - 4 line changes
+- `.github/prompts/README-SN-PRB-Jira.md` - 24 line changes
+- `.github/prompts/README-SN-RESOLVE.md` - 16 line changes
+- `.github/skills/gitter-credentials/SKILL.md` - 4 line changes
+- `README.md` - 22 line changes
+- `docs/NEWRELIC_SERVICENOW_ORCHESTRATOR_USAGE.md` - 4 line changes
+- `scripts/orchestration/newrelic_servicenow_alert_orchestrator.py` - 12 line changes
 
 

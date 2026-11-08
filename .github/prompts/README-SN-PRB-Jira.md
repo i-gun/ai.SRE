@@ -1,6 +1,6 @@
-# Prompt Pack: ServiceNow + Jira Strict Workflow
+# Skill Pack: ServiceNow + Jira Strict Workflow
 
-This folder contains reusable prompts for strict incident to problem to Jira orchestration.
+This folder links to reusable skills for strict incident-to-problem-to-Jira orchestration.
 
 ## Reuse-First Policy
 
@@ -8,17 +8,17 @@ This folder contains reusable prompts for strict incident to problem to Jira orc
 - If new automation is unavoidable, keep it promotion-ready and call out required agent/prompt/skill/doc updates.
 - Avoid duplicate tooling and consolidate overlap into the maintained artifact.
 
-Files:
-- [.github/prompts/servicenow-incident-to-prb-jira-strict.prompt.md](.github/prompts/servicenow-incident-to-prb-jira-strict.prompt.md)
+Skills:
+- [servicenow-incident-to-prb-jira-strict](../skills/servicenow-incident-to-prb-jira-strict/SKILL.md)
   Primary orchestrator prompt for ServiceNow with confirmation gate, always-fresh PRB behavior, native ServiceNow->Jira preferred routing, Jira-agent fallback when native path is unavailable, and strict completion reporting.
-- [.github/prompts/jira-create-issue-from-servicenow-handoff.prompt.md](.github/prompts/jira-create-issue-from-servicenow-handoff.prompt.md)
+- [jira-create-issue-from-servicenow-handoff](../skills/jira-create-issue-from-servicenow-handoff/SKILL.md)
   Companion Jira prompt for routed issue creation with field-resolution guardrails and strict verification output.
-- [.github/prompts/servicenow-finalize-incident-from-jira-result.prompt.md](.github/prompts/servicenow-finalize-incident-from-jira-result.prompt.md)
+- [servicenow-finalize-incident-from-jira-result](../skills/servicenow-finalize-incident-from-jira-result/SKILL.md)
   Companion ServiceNow prompt for vendor-ticket backpropagation and controlled incident resolution from native ServiceNow->Jira or Jira-agent delegation results.
-- [.github/prompts/agent-handoff-result-schema.prompt.md](.github/prompts/agent-handoff-result-schema.prompt.md)
+- [agent-handoff-result-schema](../skills/agent-handoff-result-schema/SKILL.md)
   Reusable response schema for consistent machine-readable handoffs.
 
-# Use this prompt pack from .github/prompts in this sequence.
+# Use this skill pack from .github/prompts in this sequence.
 
 1. Primary orchestration prompt:
   @ServiceNow, process incident INC0044438 with requested priority P3 and execute strict incident -> problem -> issue flow (native ServiceNow Jira preferred, Jira agent fallback).
@@ -29,8 +29,8 @@ Files:
 3. ServiceNow finalization prompt (after native ServiceNow->Jira or Jira agent returns issue identifier):
   @ServiceNow, finalize incident INC0044438 using issue result and close workflow strictly.
 
-4. Optional reusable schema prompt (for consistent agent outputs):
-  Use [.github/prompts/agent-handoff-result-schema.prompt.md](.github/prompts/agent-handoff-result-schema.prompt.md) as the required output contract for both agents, especially for ServiceNow -> Jira and Jira -> ServiceNow handoffs.
+4. Optional reusable schema skill (for consistent agent outputs):
+  Use [agent-handoff-result-schema](../skills/agent-handoff-result-schema/SKILL.md) as the required output contract for both agents, especially for ServiceNow -> Jira and Jira -> ServiceNow handoffs.
 
 # Troubleshooting
 
@@ -52,7 +52,7 @@ Files:
 
 5. Incident was not resolved after issue creation:
   - Cause: finalization step was not executed or failed during vendor-ticket backpropagation.
-  - Action: run [.github/prompts/servicenow-finalize-incident-from-jira-result.prompt.md](.github/prompts/servicenow-finalize-incident-from-jira-result.prompt.md) with issue identifier/result and verify state, resolution code, and vendor ticket.
+  - Action: invoke [servicenow-finalize-incident-from-jira-result](../skills/servicenow-finalize-incident-from-jira-result/SKILL.md) with issue identifier/result and verify state, resolution code, and vendor ticket.
 
 6. Wrong Jira project routing:
   - Cause: routing used requested priority instead of final incident priority after matrix update.
