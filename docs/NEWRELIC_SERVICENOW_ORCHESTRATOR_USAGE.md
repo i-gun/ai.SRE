@@ -21,7 +21,7 @@ For each open unacknowledged New Relic alert in scoped account `1679802`:
    - normalized title comparison that tolerates quote, punctuation, and separator differences between New Relic and ServiceNow text
 3. Branches:
    - Existing + assigned: no ServiceNow change (stop for that alert).
-   - Existing + unassigned: assigns to configured user and updates fields per `servicenow-assign-unassigned-incidents.prompt.md`.
+   - Existing + unassigned: assigns to configured user and updates fields per the `servicenow-assign-unassigned-incidents` skill.
    - Existing + resolved: no ServiceNow change; report incident number, assignee, and resolution notes.
    - Not found: creates a new incident with required defaults, including:
      - Short description = New Relic alert title with quotes removed

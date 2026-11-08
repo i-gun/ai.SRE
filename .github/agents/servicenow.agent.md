@@ -352,6 +352,6 @@ This agent uses the ServiceNow skill implementation in:
 3. If PTASK creation fails, the `@Jira` agent creates Jira issue via `jira-create-issue-from-servicenow-handoff`
 4. This agent finalises the INC (sets `vendor_ticket`, resolution note, resolves) using PTASK number or Jira issue key
 
-Use `servicenow-incident-to-prb-jira-strict.prompt.md` to orchestrate the full end-to-end flow.
+Use the `servicenow-incident-to-prb-jira-strict` skill to orchestrate the full end-to-end flow.
 
 If future behavior extensions are required, update this file after stakeholder review of initial capabilities.

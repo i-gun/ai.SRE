@@ -27,7 +27,7 @@ This skill provides secure, profile-aware credential management for:
 | Tool | Required for | Install | Verify |
 |---|---|---|---|
 | `git` | All Gitter operations | Usually preinstalled | `git --version` |
-| **GitHub CLI (`gh`)** | Pull Request workflow (create/checks/merge) on protected branches — see [gitter-pull-request.prompt.md](../../prompts/gitter-pull-request.prompt.md) | `winget install --id GitHub.cli` (Windows), `brew install gh` (macOS), or https://cli.github.com/ | `gh --version` |
+| **GitHub CLI (`gh`)** | Pull Request workflow (create/checks/merge) on protected branches — see the [gitter-pull-request skill](../gitter-pull-request/SKILL.md) | `winget install --id GitHub.cli` (Windows), `brew install gh` (macOS), or https://cli.github.com/ | `gh --version` |
 | `GITHUB_PR_TOKEN` in `.env` | `gh` authentication for PR operations, exported as `GH_TOKEN` per invocation (non-interactive, not persisted via `gh auth login`) | Fine-grained PAT: `Contents: Read/write` + `Pull requests: Read/write` on this repo only | `gh auth status` (after exporting) |
 
 `gh` is the promoted tool for all GitHub-side operations (PR create/status/merge) — Gitter does not
