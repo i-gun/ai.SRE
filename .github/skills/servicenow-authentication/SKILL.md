@@ -1,6 +1,6 @@
 ---
 name: 'servicenow-authentication'
-description: 'ServiceNow authentication and configuration validation skill using .env-based host, username, and password for secure API access.'
+description: 'ServiceNow authentication and configuration validation using environment-selected Basic or OAuth client credentials for service-account API access.'
 keywords: ['servicenow', 'authentication', 'env', 'credentials', 'validation']
 ---
 
@@ -16,9 +16,15 @@ This skill validates and normalizes ServiceNow credentials from `.env` before op
 ## Required Environment Variables
 
 - `SERVICENOW_HOST`
-- `SERVICENOW_USERNAME`
-- `SERVICENOW_PASSWORD`
+- `SERVICENOW_AUTH_MODE`: `basic` (default) or `oauth_client_credentials`
+- Basic only: `SERVICENOW_USERNAME`, `SERVICENOW_PASSWORD`
+- OAuth only: `SERVICENOW_CLIENT_ID`, `SERVICENOW_CLIENT_SECRET`
+- Optional OAuth: `SERVICENOW_TOKEN_URL`, `SERVICENOW_OAUTH_SCOPE`,
+  `SERVICENOW_OAUTH_CLIENT_AUTH_METHOD`
 - `SERVICENOW_ASSIGNMENT_GROUPS` (comma-separated list of allowed assignment group names or sys_ids)
+
+See `docs/SERVICENOW_AUTHENTICATION.md`. OAuth requires HTTPS. Username may remain
+as a workflow identity; its password is not required or sent in OAuth mode.
 
 ## Responsibilities
 
@@ -33,7 +39,8 @@ This skill validates and normalizes ServiceNow credentials from `.env` before op
 
 - Missing one or more required variables
 - Invalid host format
-- Empty username or password
+- Empty username or password in Basic mode
+- Invalid mode, missing OAuth credentials, or unsafe OAuth token URL
 - Missing or empty assignment group allowlist
 
 ## Security Rules

@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Daily Expiring Secrets Orchestrator (Deprecated)
 
-> **Deprecated.** This monolithic prompt is retained for backward compatibility only.
+> **Deprecated.** This legacy workflow is retained for backward compatibility only.
 > Use the decoupled pair instead:
 > - [expiring-secrets-analysis skill](../expiring-secrets-analysis/SKILL.md) — default,
 >   read-only data retrieval/classification, persists a `resolution_matrix` artifact.
@@ -21,7 +21,8 @@ disable-model-invocation: true
 > invoke [expiring-secrets-execute skill](../expiring-secrets-execute/SKILL.md) separately
 > and confirm before any write occurs. This preserves today's default dry-run behavior exactly.
 
-Use this prompt to run the daily expiring secrets flow with strict reuse-before-create behavior.
+Run this compatibility skill in the `@Advisor` context. Prefer the decoupled analysis and
+execute skills linked above for new work.
 
 Dry-run mode:
 - Read-only only; do not create, raise, update, or resolve incidents, problems, issues, or other artifacts.

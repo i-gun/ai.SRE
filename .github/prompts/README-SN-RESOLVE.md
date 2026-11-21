@@ -1,6 +1,6 @@
 # Skill Pack: ServiceNow Incident Resolution
 
-This skill pack links to reusable ServiceNow workflows for targeted incident classes with strict non-resolved filtering and standardized closure fields.
+This skill-pack index links to reusable ServiceNow workflows for targeted incident classes with strict non-resolved filtering and standardized closure fields.
 
 ## Reuse-First Policy
 
@@ -37,5 +37,5 @@ Skills:
 - Exclude incidents already resolved using both query-time and client-side checks.
 - Treat all of these as resolved: 6, 6 - Resolved, Resolved, and any display value containing Resolved.
 - Assign unassigned incidents before applying closure updates.
-- Use provided close notes as-is in each prompt; do not fetch from Confluence.
+- Use provided close notes as-is in each skill; do not fetch from Confluence.
 - For single-incident strict flow, require all gates before mutation: incident number, resolution code, resolution notes.

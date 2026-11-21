@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 # RCA Executive Summary
 
-Use this prompt to produce a leadership-ready executive summary from a completed RCA investigation, as a standalone artifact or for inclusion at the top of the full report.
+Run this skill in the `@RCA` context to produce a leadership-ready executive summary from a
+completed investigation, either as a standalone artifact or at the top of the full report.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

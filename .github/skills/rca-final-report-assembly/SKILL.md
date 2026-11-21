@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 # RCA Final Report Assembly
 
-Use this prompt during Phase 4 (Reporting and Outputs) to assemble the final deliverable from all completed stream outputs.
+Run this skill in the `@RCA` context during Phase 4 (Reporting and Outputs) to assemble the
+final deliverable from completed stream outputs.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

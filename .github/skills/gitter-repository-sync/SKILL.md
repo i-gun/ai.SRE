@@ -4,9 +4,9 @@ description: "Synchronize a local Git branch with its remote using safe validati
 disable-model-invocation: true
 ---
 
-# Gitter Prompt: Local Repository Synchronization (Strict)
+# Gitter Skill: Local Repository Synchronization (Strict)
 
-Use this prompt with the Gitter agent to synchronize local repository state with the remote branch while preserving auditability and minimizing risk.
+Run this skill in the `@Gitter` context to synchronize local repository state with the remote branch while preserving auditability and minimizing risk.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.
@@ -28,7 +28,7 @@ STRICT EXECUTION POLICY:
 	- If there are no local changes to sync (clean tree, nothing staged/unstaged), skip routing — just report sync status for the protected branch as-is; there is nothing to route.
 	- Otherwise, auto-route: create and check out a new feature branch from the up-to-date protected branch using the pattern `sync/<yyyyMMddHHmm>-<short-desc>` (derive `<short-desc>` from the change intent if known, else `local-changes`). Report the exact branch name created.
 	- Continue Steps 2-6 on this feature branch. Do not touch the protected branch's working state further.
-	- After push (Step 5) succeeds, automatically chain into the `Gitter: Pull Request Workflow` prompt for this feature branch, targeting the protected branch it was routed from — no manual re-invocation required. The chained run executes PR create -> checks polling -> review polling and STOPS at the existing human-confirmation gate before merge (Step 6 of that prompt is untouched: merge is never automatic). Populate `chained_pr_workflow` with the outcome of that run. If the chained invocation cannot start (e.g. `gh` missing, `GITHUB_PR_TOKEN` missing), do not fail the sync itself — the feature branch is already safely pushed — instead report the PR-workflow precondition failure inside `chained_pr_workflow` and set `next_action` to the manual fallback command.
+	- After push (Step 5) succeeds, automatically chain into the `gitter-pull-request` skill for this feature branch, targeting the protected branch it was routed from — no manual re-invocation required. The chained run executes PR creation, checks polling, and review polling, then STOPS at the existing human-confirmation gate before merge (Step 6 of that skill is untouched: merge is never automatic). Populate `chained_pr_workflow` with the outcome of that run. If the chained invocation cannot start (e.g. `gh` missing, `GITHUB_PR_TOKEN` missing), do not fail the sync itself — the feature branch is already safely pushed — instead report the PR-workflow precondition failure inside `chained_pr_workflow` and set `next_action` to the manual fallback command.
 
 1b) Existing PR Check (only when current branch is NOT protected, i.e. Step 1a did not trigger):
 	- Run `gh pr view --json number,state,url,baseRefName` for the current branch (gh infers HEAD's branch; no argument needed). Treat a "no pull requests found" error, or `gh` being unavailable, as "no PR" — proceed straight to Step 2 as a normal pre-PR feature branch.
@@ -128,7 +128,7 @@ DECISION RULES:
 
 ## Protected Branch Routing
 
-This prompt never pushes directly to a protected branch (`main`, `master`, `release/*`, or any pattern in `GIT_PROTECTED_BRANCHES`). When changes exist on a protected branch, this prompt automatically routes them onto a new feature branch (Step 1a) — creating, committing, and pushing there — using the same naming/commit conventions as any other sync. It then automatically chains into the `Gitter: Pull Request Workflow` prompt for that feature branch, which runs `gh pr create` and gates progress on required checks and reviews. Local sync mechanics and GitHub-side PR lifecycle remain implemented in separate prompts (no duplicated `gh` logic, per the reuse-first policy) — this prompt just invokes the other one as its final step instead of requiring a manual re-prompt.
+This skill never pushes directly to a protected branch (`main`, `master`, `release/*`, or any pattern in `GIT_PROTECTED_BRANCHES`). When changes exist on a protected branch, it automatically routes them onto a new feature branch (Step 1a) — creating, committing, and pushing there — using the same naming/commit conventions as any other sync. It then automatically chains into the `gitter-pull-request` skill for that feature branch, which runs `gh pr create` and gates progress on required checks and reviews. Local sync mechanics and GitHub-side PR lifecycle remain in separate skills (no duplicated `gh` logic, per the reuse-first policy).
 
 **What is and isn't automatic**: PR creation, check polling, and review-status polling all happen without human intervention as part of this chained flow. The actual merge onto the protected branch is never automatic — Step 6 of the [gitter-pull-request skill](../gitter-pull-request/SKILL.md) still requires an explicit human "yes" before `gh pr merge` runs, and that gate is untouched by this change. The authoritative guardrail remains GitHub branch protection on the remote (required PR, required status checks, required reviews, no force-push); chaining only removes the need to manually re-invoke the next skill, not the human review/merge gate itself.
 
@@ -136,8 +136,8 @@ This prompt never pushes directly to a protected branch (`main`, `master`, `rele
 
 When the current branch is not protected, Step 1b checks whether it already has an associated PR before staging anything new:
 - **OPEN PR** → reuse the same branch; new commits land on the existing PR. No second branch, no second PR (avoids the rebase/force-push cascade that stacked branches would require).
-- **MERGED PR** (typically merged externally/behind the scenes, without this session running the `gitter-pull-request` prompt's own post-merge cleanup) → clean up this stale branch (switch to base, pull, delete local+remote), then reroute any pending new changes onto a fresh branch via Step 1a.
-- **CLOSED, unmerged PR** → stop and ask the user; abandoning or reusing a closed-without-merge branch is a judgment call this prompt will not make automatically.
+- **MERGED PR** (typically merged externally/behind the scenes, without this session running the `gitter-pull-request` skill's own post-merge cleanup) → clean up this stale branch (switch to base, pull, delete local+remote), then reroute any pending new changes onto a fresh branch via Step 1a.
+- **CLOSED, unmerged PR** → stop and ask the user; abandoning or reusing a closed-without-merge branch is a judgment call this skill will not make automatically.
 
 This is the same cleanup mechanism the [gitter-pull-request skill](../gitter-pull-request/SKILL.md) runs proactively right after a merge it performs itself; Step 1b is the fallback that catches merges Gitter didn't perform.
 
@@ -176,19 +176,19 @@ This is the same cleanup mechanism the [gitter-pull-request skill](../gitter-pul
 
 5. Current branch is protected (`main`/`master`/`release/*`) with local changes:
 - Cause: policy forbids syncing changes directly onto a protected branch.
-- Action: this prompt auto-routes onto a new feature branch (Step 1a), pushes it, and automatically chains into the `Gitter: Pull Request Workflow` prompt for that branch (PR create -> checks -> review). No manual branch creation or manual re-invocation needed; merge still requires explicit human confirmation in that prompt's Step 6.
+- Action: this skill auto-routes onto a new feature branch (Step 1a), pushes it, and automatically chains into the `gitter-pull-request` skill for that branch (PR creation -> checks -> review). No manual branch creation or manual re-invocation is needed; merge still requires explicit human confirmation in that skill's Step 6.
 
 5a. Chained PR workflow could not start (`gh` missing or `GITHUB_PR_TOKEN` unset):
 - Cause: PR-workflow prerequisites are not met even though the feature branch pushed successfully.
 - Action: sync itself still reports status=routed (the branch is safely pushed); `chained_pr_workflow.status` reports the precondition failure and `next_action` gives the manual command to run once prerequisites are fixed.
 
 6. Current branch is protected with a clean tree (nothing to sync):
-- Cause: user ran this prompt on a protected branch just to check sync status.
+- Cause: user ran this skill on a protected branch just to check sync status.
 - Action: report status=skipped with current ahead/behind state; no routing is performed since there is nothing to route.
 
 7. Current branch is non-protected and already has an open PR:
 - Cause: an earlier sync/PR-workflow invocation already pushed this branch and opened a PR that is still under review.
-- Action: this prompt reuses the same branch (Step 1b) — new commits are added to the existing PR. No new branch or PR is created.
+- Action: this skill reuses the same branch (Step 1b) — new commits are added to the existing PR. No new branch or PR is created.
 
 8. Current branch is non-protected and its PR already shows MERGED:
 - Cause: the PR was approved and merged (possibly by a reviewer, outside of a Gitter-run merge), so the local branch is now stale.
@@ -196,4 +196,4 @@ This is the same cleanup mechanism the [gitter-pull-request skill](../gitter-pul
 
 9. Current branch is non-protected and its PR shows CLOSED (not merged):
 - Cause: the PR was closed without merging (e.g. abandoned or superseded).
-- Action: this prompt stops and reports status=blocked; it asks the user to decide whether to reopen/reuse the branch or abandon it and start fresh from the base branch — it will not choose automatically.
+- Action: this skill stops and reports status=blocked; it asks the user to decide whether to reopen/reuse the branch or abandon it and start fresh from the base branch — it will not choose automatically.

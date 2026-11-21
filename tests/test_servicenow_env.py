@@ -27,6 +27,29 @@ VALID_ENV = {
 }
 
 
+class TestServiceNowOAuthConfig(unittest.TestCase):
+    def test_oauth_validation_matches_client_contract(self):
+        environment = {
+            "SERVICENOW_HOST": "https://example.service-now.com",
+            "SERVICENOW_ASSIGNMENT_GROUPS": "IT Support",
+            "SERVICENOW_AUTH_MODE": "oauth_client_credentials",
+            "SERVICENOW_CLIENT_ID": "test-client",
+            "SERVICENOW_CLIENT_SECRET": "test-secret",
+        }
+        for overrides in (
+            {"SERVICENOW_AUTH_MODE": "automatic"},
+            {"SERVICENOW_CLIENT_ID": ""},
+            {"SERVICENOW_CLIENT_SECRET": ""},
+            {"SERVICENOW_HOST": "http://example.service-now.com"},
+            {"SERVICENOW_TOKEN_URL": "https://other.example/oauth_token.do"},
+            {"SERVICENOW_OAUTH_CLIENT_AUTH_METHOD": "unsupported"},
+        ):
+            with self.subTest(overrides=overrides):
+                with patch.dict(os.environ, {**environment, **overrides}, clear=True):
+                    with self.assertRaises(ServiceNowAuthConfigError):
+                        load_servicenow_auth_config_from_env()
+
+
 class TestServiceNowAuthConfigConstruction(unittest.TestCase):
     """Direct construction of ServiceNowAuthConfig."""
 

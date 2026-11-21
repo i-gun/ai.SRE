@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 # RCA Intake
 
-Use this prompt to initiate an RCA investigation. It performs scope lock and configuration validation before any data collection begins.
+Run this skill in the `@RCA` context to initiate an investigation. It locks scope and validates
+configuration before any data collection begins.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.
@@ -49,4 +50,4 @@ Validate:
   - Per-stream configuration status
   - AzureGit scope (project list or `Not configured`)
   - Blockers and configuration gaps
-- End the intake summary with the prompt: `Ready to execute. Issue APPROVE_RUN_RCA to begin.`
+- End the intake summary with: `Ready to execute. Issue APPROVE_RUN_RCA to begin.`

@@ -5,9 +5,9 @@ argument-hint: "Provide: incident number, resolution code, resolution notes. Opt
 disable-model-invocation: true
 ---
 
-# ServiceNow Prompt: Resolve Single Incident With Strict Input Gates
+# ServiceNow Skill: Resolve Single Incident With Strict Input Gates
 
-Use this prompt with the ServiceNow agent to resolve one incident deterministically from caller-provided inputs.
+Run this skill in the `@ServiceNow` context to resolve one incident deterministically from caller-provided inputs.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

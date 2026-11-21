@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 # NewRelic -> ServiceNow Orchestrator (30m, Limit 5)
 
-Use this prompt to run the orchestrator with a narrow 30-minute window and return the report.
+Run this skill in the `@Advisor` context. The orchestrator coordinates the workflow; keep
+New Relic and ServiceNow operations within their respective agents and scoped skills.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

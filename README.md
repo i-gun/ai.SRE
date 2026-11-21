@@ -66,6 +66,19 @@ This generates the same three files under `data/`.
 
 ## Project Structure
 
+### Agent and skill structure
+
+Recent workflow consolidation moved reusable instructions from standalone prompt files into
+agent-owned skills. Reusable workflow instructions are maintained as skills in
+`.github/skills/<skill-name>/SKILL.md`.
+Agent definitions expose the skills they own; invoke cross-system workflows through their
+orchestrating agent (such as `@Advisor` or `@RCA`) and delegate platform-specific work to the
+corresponding integration agent. This keeps workflow orchestration separate from platform access.
+
+The former standalone prompt files are retained as `.prompt.md.bak` archival copies under
+`.github/prompts/`; the `README-*.md` files there are workflow indexes that link to the maintained
+skills. Update the skill and its owning agent definition when changing a workflow.
+
 ```
 ├── .github/
 │   ├── agents/              # AI agent definitions
@@ -229,6 +242,9 @@ Confluence knowledge operations agent for scoped page browsing, CQL search, cont
 ### AzureGit Agent
 Azure DevOps Git read-only operations agent for scoped multi-project repository lookup, code search, and lightweight codebase analysis using `.env` credentials.
 
+### AzurePortal Agent
+Azure public-cloud read-only agent for bounded Resource Graph discovery, workspace-based Application Insights telemetry, Azure Monitor Logs and metrics, fired alerts, monitoring definitions, and Activity Log. Uses explicit Entra identity and configured scope allowlists.
+
 ### NewRelic Agent
 New Relic observability agent for log search, trend analysis, dependency traversal, automated root cause analysis, and alert acknowledgment across configured accounts using `.env` credentials. Primary account: CTC Production `1679802`.
 
@@ -269,6 +285,15 @@ Credential validation and normalization for Azure DevOps organization, scoped pr
 
 ### AzureGit Repository Operations Skill
 Read-only Azure DevOps Git operations for repository discovery, file listing, content search, and lightweight repository structure analysis across scoped projects.
+
+### AzurePortal Authentication Skill
+Validates explicit Azure CLI, managed-identity, or service-principal authentication and tenant, subscription, workspace, resource-group, resource, and query-bound configuration.
+
+### AzurePortal Resource Operations Skill
+Read-only Azure Resource Graph discovery, ambiguity-safe resource resolution, non-secret metadata, and workspace-based Application Insights resource-to-workspace mapping.
+
+### AzurePortal Monitoring Operations Skill
+Fixed-template Azure Monitor Logs and Application Insights queries, schema metadata, bounded metrics and comparisons, fired alerts, monitoring definitions, Activity Log, and diagnostic settings.
 
 ### NewRelic Authentication Skill
 Credential validation and normalization for New Relic API key and comma-separated account ID list loaded from `.env`.
@@ -540,5 +565,77 @@ This section is automatically maintained by pre-commit hooks.
 - `README.md` - 22 line changes
 - `docs/NEWRELIC_SERVICENOW_ORCHESTRATOR_USAGE.md` - 4 line changes
 - `scripts/orchestration/newrelic_servicenow_alert_orchestrator.py` - 12 line changes
+
+
+
+## Recent Changes
+
+**Updated: 2026-11-21 17:03:07**
+
+**New Files Added** (13):
+- `.github/agents/azureportal.agent.md` - Documentation
+- `.github/skills/azureportal-authentication/SKILL.md` - Documentation
+- `.github/skills/azureportal-authentication/azureportal_env.py` - Python implementation
+- `.github/skills/azureportal-authentication/azureportal_errors.py` - Python implementation
+- `.github/skills/azureportal-authentication/azureportal_query_templates.py` - Python implementation
+- `.github/skills/azureportal-authentication/azureportal_transport.py` - Python implementation
+- `.github/skills/azureportal-monitoring-operations/SKILL.md` - Documentation
+- `.github/skills/azureportal-monitoring-operations/azureportal_monitoring_client.py` - Python implementation
+- `.github/skills/azureportal-resource-operations/SKILL.md` - Documentation
+- `.github/skills/azureportal-resource-operations/azureportal_resource_client.py` - Python implementation
+- `docs/AZUREPORTAL.md` - Documentation
+- `docs/SERVICENOW_AUTHENTICATION.md` - Documentation
+- `tests/test_azureportal.py` - Python implementation
+
+**Files Modified** (49):
+- `.copilot-instructions.md` - 16 line changes
+- `.env.example` - 32 line changes
+- `.env.template` - 66 line changes
+- `.github/agents/advisor.agent.md` - 3 line changes
+- `.github/agents/gitter.agent.md` - 8 line changes
+- `.github/agents/jira.agent.md` - 4 line changes
+- `.github/agents/rca.agent.md` - 4 line changes
+- `.github/agents/servicenow.agent.md` - 15 line changes
+- `.github/prompts/README-SN-PRB-Jira.md` - 18 line changes
+- `.github/prompts/README-SN-RESOLVE.md` - 6 line changes
+- `.github/skills/agent-handoff-result-schema/SKILL.md` - 9 line changes
+- `.github/skills/cve-impact-analysis/SKILL.md` - 6 line changes
+- `.github/skills/cve-impact-daily-operator/SKILL.md` - 7 line changes
+- `.github/skills/cve-impact-execute/SKILL.md` - 6 line changes
+- `.github/skills/expiring-secrets-analysis/SKILL.md` - 6 line changes
+- `.github/skills/expiring-secrets-daily-operator/SKILL.md` - 7 line changes
+- `.github/skills/expiring-secrets-execute/SKILL.md` - 6 line changes
+- `.github/skills/gitter-pull-request/SKILL.md` - 26 line changes
+- `.github/skills/gitter-repository-sync/SKILL.md` - 22 line changes
+- `.github/skills/jira-create-issue-from-servicenow-handoff/SKILL.md` - 8 line changes
+- `.github/skills/newrelic-servicenow-orchestrator-30m-odp/SKILL.md` - 5 line changes
+- `.github/skills/rca-azuregit-code-attribution/SKILL.md` - 6 line changes
+- `.github/skills/rca-deep-investigation/SKILL.md` - 5 line changes
+- `.github/skills/rca-executive-summary/SKILL.md` - 5 line changes
+- `.github/skills/rca-final-report-assembly/SKILL.md` - 5 line changes
+- `.github/skills/rca-hypothesis-stress-test/SKILL.md` - 5 line changes
+- `.github/skills/rca-intake/SKILL.md` - 7 line changes
+- `.github/skills/rca-similar-incident-comparison/SKILL.md` - 5 line changes
+- `.github/skills/servicenow-assign-unassigned-incidents/SKILL.md` - 8 line changes
+- `.github/skills/servicenow-authentication/SKILL.md` - 17 line changes
+- `.github/skills/servicenow-authentication/servicenow_env.py` - 53 line changes
+- `.github/skills/servicenow-finalize-incident-from-jira-result/SKILL.md` - 8 line changes
+- `.github/skills/servicenow-incident-operations/README.md` - 11 line changes
+- `.github/skills/servicenow-incident-operations/SKILL.md` - 11 line changes
+- `.github/skills/servicenow-incident-operations/servicenow_client.py` - 136 line changes
+- `.github/skills/servicenow-incident-to-prb-jira-strict/SKILL.md` - 6 line changes
+- `.github/skills/servicenow-raise-priority-strict/SKILL.md` - 6 line changes
+- `.github/skills/servicenow-resolve-gigya-incidents/SKILL.md` - 8 line changes
+- `.github/skills/servicenow-resolve-incident-strict/SKILL.md` - 6 line changes
+- `.github/skills/servicenow-resolve-rtcdp-incidents/SKILL.md` - 8 line changes
+- `.github/skills/servicenow-resolve-sfsc-incidents/SKILL.md` - 8 line changes
+- `README.md` - 27 line changes
+- `docs/AGENT_CAPABILITIES.md` - 33 line changes
+- `docs/INTEGRATION_GOVERNANCE.md` - 28 line changes
+- `requirements.txt` - 3 line changes
+- `scripts/servicenow/common.py` - 40 line changes
+- `tests/test_servicenow_client.py` - 122 line changes
+- `tests/test_servicenow_env.py` - 25 line changes
+- `tests/test_servicenow_scripts.py` - 43 line changes
 
 

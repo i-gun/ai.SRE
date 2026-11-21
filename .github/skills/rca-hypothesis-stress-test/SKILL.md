@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 # RCA Hypothesis Stress-Test
 
-Use this prompt during Phase 3 (Synthesis and Challenge) to rigorously test each hypothesis before selecting a root cause.
+Run this skill in the `@RCA` context during Phase 3 (Synthesis and Challenge) to rigorously
+test each hypothesis before selecting a root cause.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

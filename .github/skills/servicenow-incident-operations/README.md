@@ -19,9 +19,14 @@ This skill enables secure ServiceNow incident operations from the local project 
 Set these in `.env`:
 
 - `SERVICENOW_HOST`
-- `SERVICENOW_USERNAME`
-- `SERVICENOW_PASSWORD`
+- `SERVICENOW_AUTH_MODE`: `basic` (default) or `oauth_client_credentials`
+- Basic only: `SERVICENOW_USERNAME`, `SERVICENOW_PASSWORD`
+- OAuth only: `SERVICENOW_CLIENT_ID`, `SERVICENOW_CLIENT_SECRET`
+- Optional OAuth: `SERVICENOW_TOKEN_URL`, `SERVICENOW_OAUTH_SCOPE`,
+  `SERVICENOW_OAUTH_CLIENT_AUTH_METHOD`
 - `SERVICENOW_ASSIGNMENT_GROUPS` (comma-separated allowlist of assignment group names or sys_ids)
+
+See `docs/SERVICENOW_AUTHENTICATION.md` for configuration and read-only testing.
 
 ## Key Files
 
