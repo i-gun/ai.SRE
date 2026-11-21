@@ -14,6 +14,10 @@ and supply (or accept the auto-discovered latest) `resolution_matrix` artifact p
 This flow performs writes and therefore defaults to a hard stop before any create/repair
 action until the operator explicitly confirms.
 
+Run this workflow from `@Advisor` as the orchestrator. Delegate platform-specific
+rechecks and writes to `@Jira` and `@ServiceNow`; do not bypass their validation or
+write-safety gates. The explicit operator confirmation required below remains mandatory.
+
 Secret-name exclusion policy:
 - Treat the analysis exclusion policy as authoritative and apply it again defensively at
   execution time, case-insensitively, to each row's `objectName`.

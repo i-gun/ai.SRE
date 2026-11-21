@@ -1,11 +1,11 @@
 ---
 name: jira-create-issue-from-servicenow-handoff
-description: "Use this prompt with the Jira agent after ServiceNow confirms incident and problem context."
+description: "Use this skill with the Jira agent after ServiceNow confirms incident and problem context."
 disable-model-invocation: true
 ---
-# Jira Prompt: Create Issue From ServiceNow Handoff (Strict)
+# Jira Skill: Create Issue From ServiceNow Handoff (Strict)
 
-Use this prompt with the Jira agent after ServiceNow confirms incident and problem context.
+Run this skill in the `@Jira` context after `@ServiceNow` confirms incident and problem context.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

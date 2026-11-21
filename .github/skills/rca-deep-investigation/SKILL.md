@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 # RCA Deep Investigation
 
-Use this prompt after `APPROVE_RUN_RCA` is issued. It launches all five evidence streams concurrently and runs analysis phases.
+Run this skill in the `@RCA` context only after `APPROVE_RUN_RCA` is issued. It coordinates
+the evidence streams through their respective integration agents, then runs the analysis phases.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

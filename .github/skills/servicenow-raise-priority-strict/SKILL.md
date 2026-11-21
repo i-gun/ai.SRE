@@ -4,9 +4,9 @@ description: "Raise the priority of a ServiceNow incident with strict validation
 disable-model-invocation: true
 ---
 
-# ServiceNow Prompt: Strict Incident Priority Raise
+# ServiceNow Skill: Strict Incident Priority Raise
 
-Use this prompt with the ServiceNow agent to increase incident priority with strict scope, ownership, and approval confirmation gates.
+Run this skill in the `@ServiceNow` context to increase incident priority with strict scope, ownership, and approval confirmation gates.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

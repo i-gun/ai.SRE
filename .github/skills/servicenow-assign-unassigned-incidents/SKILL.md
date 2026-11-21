@@ -1,11 +1,11 @@
 ---
 name: servicenow-assign-unassigned-incidents
-description: "Use this prompt with the ServiceNow agent to fetch active unassigned incidents in scoped groups and assign them to your configured user."
+description: "Use this skill with the ServiceNow agent to fetch active unassigned incidents in scoped groups and assign them to your configured user."
 disable-model-invocation: true
 ---
-# ServiceNow Prompt: Assign Active Unassigned Incidents
+# ServiceNow Skill: Assign Active Unassigned Incidents
 
-Use this prompt with the ServiceNow agent to fetch active unassigned incidents in scoped groups and assign them to your configured user.
+Run this skill in the `@ServiceNow` context to fetch active unassigned incidents in scoped groups and assign them to your configured user.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

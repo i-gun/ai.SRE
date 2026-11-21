@@ -5,10 +5,12 @@ from __future__ import annotations
 import contextlib
 import importlib.util
 import io
+import os
 import re
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import mock_open, patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -105,6 +107,45 @@ class TestServiceNowScriptPolicy(unittest.TestCase):
                 msg=f"{path.name} contains a hardcoded assigned operational identifier.",
             )
         self.assertTrue(checked)
+
+
+class TestServiceNowCommonBootstrap(unittest.TestCase):
+
+    def setUp(self):
+        self.module = _load_module("servicenow_common", SERVICENOW_SCRIPTS / "common.py")
+
+    def test_dotenv_override_setting_enables_override_env(self):
+        dotenv = "SERVICENOW_OVERRIDE_ENV=true\n"
+        mocked_open = mock_open(read_data=dotenv)
+        with patch.object(self.module.Path, "exists", return_value=True), patch(
+            "pathlib.Path.open", mocked_open
+        ), patch.object(self.module, "bootstrap_paths") as bootstrap_paths:
+            self.module.bootstrap()
+
+        bootstrap_paths.assert_called_once()
+        self.assertTrue(bootstrap_paths.call_args.kwargs["override_env"])
+
+    def test_explicit_override_arg_still_enables_override_env(self):
+        with patch.object(self.module.Path, "exists", return_value=False), patch.object(
+            self.module, "bootstrap_paths"
+        ) as bootstrap_paths:
+            self.module.bootstrap(override_env=True)
+
+        bootstrap_paths.assert_called_once()
+        self.assertTrue(bootstrap_paths.call_args.kwargs["override_env"])
+
+    def test_dotenv_override_setting_wins_over_process_env(self):
+        dotenv = "SERVICENOW_OVERRIDE_ENV=true\n"
+        mocked_open = mock_open(read_data=dotenv)
+        with patch.dict(os.environ, {"SERVICENOW_OVERRIDE_ENV": "false"}, clear=False), patch.object(
+            self.module.Path, "exists", return_value=True
+        ), patch("pathlib.Path.open", mocked_open), patch.object(
+            self.module, "bootstrap_paths"
+        ) as bootstrap_paths:
+            self.module.bootstrap()
+
+        bootstrap_paths.assert_called_once()
+        self.assertTrue(bootstrap_paths.call_args.kwargs["override_env"])
 
 
 if __name__ == "__main__":

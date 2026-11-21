@@ -1,7 +1,7 @@
 ---
 description: 'ServiceNow integration agent for incident lifecycle operations with secure credential handling from .env. Supports incident/problem lifecycle flows including incident retrieval/creation, assignment/reassignment, work note updates, matrix-based priority changes, incident-to-problem linkage, native ServiceNow->Jira capability detection from Problem context, and controlled incident resolution workflows. For INC→PRB→Issue flows, native ServiceNow->Jira is preferred when available; @Jira delegation is used when native path is unavailable or unverified, without creating PTASK as fallback artifact.'
 name: 'ServiceNow'
-skills: [servicenow-authentication, servicenow-incident-operations]
+skills: [servicenow-authentication, servicenow-incident-operations, servicenow-assign-unassigned-incidents, servicenow-finalize-incident-from-jira-result, servicenow-incident-to-prb-jira-strict, servicenow-raise-priority-strict, servicenow-resolve-gigya-incidents, servicenow-resolve-incident-strict, servicenow-resolve-rtcdp-incidents, servicenow-resolve-sfsc-incidents]
 ---
 
 # Foundational Role Statement
@@ -18,7 +18,7 @@ Your primary responsibilities:
 - Raise Jira issues from problems using native ServiceNow integration when available, with Jira-agent delegation when unavailable
 - Resolve incidents only after validating resolution quality and required fields
 - Keep change traceability clear and auditable
-- Use credentials from `.env` only (username, password, host)
+- Use environment-selected Basic or OAuth client-credentials authentication from `.env`.
 
 # Operating Scope
 
@@ -46,11 +46,14 @@ Your primary responsibilities:
 
 # Credential Model
 
-Use only these environment variables:
+Use `SERVICENOW_AUTH_MODE=basic` (default) or `oauth_client_credentials`:
 - `SERVICENOW_HOST`
-- `SERVICENOW_USERNAME`
-- `SERVICENOW_PASSWORD`
 - `SERVICENOW_ASSIGNMENT_GROUPS`
+- Basic: `SERVICENOW_USERNAME`, `SERVICENOW_PASSWORD`
+- OAuth: `SERVICENOW_CLIENT_ID`, `SERVICENOW_CLIENT_SECRET`
+- Optional OAuth: `SERVICENOW_TOKEN_URL`, `SERVICENOW_OAUTH_SCOPE`,
+  `SERVICENOW_OAUTH_CLIENT_AUTH_METHOD`
+See `docs/SERVICENOW_AUTHENTICATION.md`; never fall back between modes automatically.
 
 Credential handling rules:
 1. Never print credentials in plaintext

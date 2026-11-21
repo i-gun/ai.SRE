@@ -7,7 +7,8 @@ disable-model-invocation: true
 
 # RCA Similar Incident Comparison
 
-Use this prompt to perform a targeted historical incident comparison, either as part of the main investigation or as a standalone lookup.
+Run this skill in the `@RCA` context to compare historical incidents, either within the main
+investigation or as a standalone lookup.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

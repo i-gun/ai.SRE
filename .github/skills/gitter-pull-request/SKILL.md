@@ -4,16 +4,16 @@ description: "Land changes on a protected branch (main/master/release) via a fea
 disable-model-invocation: true
 ---
 
-# Gitter Prompt: Pull Request Workflow (Protected Branch Landing)
+# Gitter Skill: Pull Request Workflow (Protected Branch Landing)
 
-Use this prompt with the Gitter agent whenever a change must reach a protected branch
+Run this skill in the `@Gitter` context whenever a change must reach a protected branch
 (`main`, `master`, `release/*`, or any pattern configured in `GIT_PROTECTED_BRANCHES`).
-Direct commits/pushes to protected branches are never permitted — this prompt is the only
+Direct commits/pushes to protected branches are never permitted — this skill is the only
 sanctioned path onto them, and it relies on the `gh` CLI (promoted tool) rather than raw
 GitHub API scripting.
 
 **Automatic entry point**: the `gitter-repository-sync` skill, Step 1a (and its Step 1b
-reroute path) automatically chains into this prompt right after pushing a routed feature
+reroute path) automatically chains into this skill right after pushing a routed feature
 branch — no manual re-invocation is required to reach PR creation, check polling, and
 review polling. The one thing that never happens automatically, from either entry point,
 is the merge in Step 6: it always requires an explicit human confirmation.
@@ -21,8 +21,8 @@ is the merge in Step 6: it always requires an explicit human confirmation.
 Reuse-first policy:
 - Use the `gh` CLI for all GitHub-side operations (PR create/status/merge). Do not write
   custom scripts against the GitHub REST/GraphQL API for this workflow.
-- Prefer the existing `gitter-repository-sync` prompt for the local commit/push mechanics
-  on the feature branch; this prompt adds the PR + guardrail layer on top.
+- Prefer the `gitter-repository-sync` skill for local commit/push mechanics on the feature
+  branch; this skill adds the PR and guardrail layer.
 
 ## Prerequisites
 
@@ -32,11 +32,11 @@ Reuse-first policy:
   the full requirement table.
 - **`GITHUB_PR_TOKEN`** set in `.env` — a least-privilege fine-grained PAT scoped to
   `Contents: Read/write` + `Pull requests: Read/write` on this repo only. This token is
-  exported as `GH_TOKEN` for the duration of each `gh` invocation in this prompt; it is
+  exported as `GH_TOKEN` for the duration of each `gh` invocation in this skill; it is
   never persisted via `gh auth login`, and it is distinct from `GITHUB_TOKEN` (which is
   reserved for administrative/one-off operations such as branch protection setup — do not
   use it here).
-- Without `gh` or without `GITHUB_PR_TOKEN`, this prompt stops at Step 1 and reports
+- Without `gh` or without `GITHUB_PR_TOKEN`, this skill stops at Step 1 and reports
   `gh_cli_unavailable` / `gh_token_missing` — it does not fall back to raw API calls or to
   `GITHUB_TOKEN`.
 
@@ -53,7 +53,7 @@ STRICT EXECUTION POLICY:
 	  failure_reason="gh_token_missing"; do not substitute `GITHUB_TOKEN`.
 	- Confirm `gh auth status` succeeds using the exported `GH_TOKEN`.
 	- Confirm the target branch (e.g. `main`) is in the protected branch list. If the
-	  target is NOT protected, tell the user this prompt is unnecessary and defer to
+	  target is NOT protected, tell the user this skill is unnecessary and defer to
 	  `gitter-repository-sync`.
 
 2) Feature branch:
@@ -140,7 +140,7 @@ DECISION RULES:
 Agent instructions alone cannot prevent a direct `git push origin main` run outside of
 Gitter. The actual enforcement is GitHub branch protection on the target branch (required
 PR, required status checks, required reviews, no force-push, no direct pushes — including
-for admins). This prompt assumes that protection is configured and focuses on guiding
+for admins). This skill assumes that protection is configured and focuses on guiding
 contributors through the compliant path plus verifying the CI/review gate before advising
 a merge. Use `scripts/gitter/verify_branch_protection.py` periodically to confirm the
 GitHub-side protection has not drifted.
@@ -155,7 +155,7 @@ directly with the hard "never force-push / never rewrite shared history" rule in
 - While a PR from this branch is still OPEN, additional changes are pushed as new commits
   to the *same* branch/PR (handled by `gitter-repository-sync`'s Step 1b) — no new branch,
   no new PR.
-- A new feature branch is only created once this branch's PR is MERGED (via this prompt's
+- A new feature branch is only created once this branch's PR is MERGED (via this skill's
   Step 7 cleanup, or — if the PR was merged externally/behind the scenes without this
   prompt — via `gitter-repository-sync`'s Step 1b cleanup-and-reroute path) or the PR is
   explicitly abandoned by the user.
@@ -181,7 +181,7 @@ directly with the hard "never force-push / never rewrite shared history" rule in
 - Action: verify [python-tests.yml](../../workflows/python-tests.yml) job name matches the
   required check configured in branch protection settings.
 
-2a. PR was merged externally (by a reviewer, or outside this session) before this prompt's
+2a. PR was merged externally (by a reviewer, or outside this session) before this skill's
     own Step 7 cleanup ran:
 - Cause: merge happened "behind the scenes" — this session never reached Step 6/7.
 - Action: no action needed here. The next invocation of `gitter-repository-sync` on this

@@ -5,9 +5,9 @@ argument-hint: "Optional override: change Jira ticket/vendor ticket or refine sh
 disable-model-invocation: true
 ---
 
-# ServiceNow Prompt: Resolve Active Non-Resolved SFSC Incidents
+# ServiceNow Skill: Resolve Active Non-Resolved SFSC Incidents
 
-Use this prompt with the ServiceNow agent to find active, non-resolved SFSC incidents in scoped groups and resolve them with standardized closure fields.
+Run this skill in the `@ServiceNow` context to find active, non-resolved SFSC incidents in scoped groups and resolve them with standardized closure fields.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.
@@ -36,7 +36,7 @@ Requirements:
    - Remaining active incidents matching filter (if any)
 
 DO NOT:
-- Use @Confluence skill for this prompt; close notes are already provided and must be used as-is.
+- Do not invoke `@Confluence` for this workflow; close notes are provided and must be used as-is.
 - Fetch or update incidents already in state 'Resolved'.
 - Treat all of these as resolved and exclude them: `6`, `6 - Resolved`, `Resolved` (or any display value containing `Resolved`).
 - Use both query-time and client-side state checks before assignment or resolution actions.

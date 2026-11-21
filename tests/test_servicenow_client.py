@@ -8,17 +8,137 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import requests
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CLIENT_PATH = PROJECT_ROOT / ".github" / "skills" / "servicenow-incident-operations"
 if str(CLIENT_PATH) not in sys.path:
     sys.path.insert(0, str(CLIENT_PATH))
+AUTH_PATH = PROJECT_ROOT / ".github" / "skills" / "servicenow-authentication"
+if str(AUTH_PATH) not in sys.path:
+    sys.path.insert(0, str(AUTH_PATH))
+
+from servicenow_env import load_servicenow_auth_config_from_env
 
 from servicenow_client import (  # noqa: E402
     ServiceNowClient,
     ServiceNowConfig,
     ServiceNowConfigError,
+    ServiceNowAPIError,
     ServiceNowValidationError,
 )
+
+
+class TestServiceNowOAuth(unittest.TestCase):
+    def setUp(self):
+        self.environment = {
+            "SERVICENOW_HOST": "https://example.service-now.com",
+            "SERVICENOW_ASSIGNMENT_GROUPS": "Group A",
+            "SERVICENOW_AUTH_MODE": "oauth_client_credentials",
+            "SERVICENOW_CLIENT_ID": "test-client",
+            "SERVICENOW_CLIENT_SECRET": "test-secret",
+        }
+
+    def config(self, **overrides):
+        with patch.dict(os.environ, {**self.environment, **overrides}, clear=True):
+            return ServiceNowConfig.from_env()
+
+    def prepare(self, client):
+        return client.session.prepare_request(requests.Request(
+            "GET", "https://example.service-now.com/api/now/attachment/test/file"
+        ))
+
+    def token_response(self):
+        response = MagicMock(status_code=200)
+        response.json.return_value = {
+            "access_token": "test-token", "token_type": "Bearer", "expires_in": 3600
+        }
+        return response
+
+    def test_basic_is_default_and_preserves_session_auth(self):
+        with patch.dict(os.environ, {
+            "SERVICENOW_HOST": self.environment["SERVICENOW_HOST"],
+            "SERVICENOW_USERNAME": "original-user",
+            "SERVICENOW_PASSWORD": "original-password",
+            "SERVICENOW_ASSIGNMENT_GROUPS": "Group A",
+        }, clear=True):
+            client = ServiceNowClient.from_env()
+        self.assertEqual(client.config.auth_mode, "basic")
+        self.assertEqual(client.session.auth, ("original-user", "original-password"))
+
+    def test_both_loaders_accept_oauth_without_user_password(self):
+        with patch.dict(os.environ, self.environment, clear=True):
+            config = ServiceNowConfig.from_env()
+            auth_config = load_servicenow_auth_config_from_env()
+        self.assertEqual(vars(config), vars(auth_config))
+        self.assertEqual(config.token_url, config.host + "/oauth_token.do")
+        self.assertNotIn("test-secret", repr(config))
+
+    def test_invalid_oauth_config_rejected(self):
+        for overrides in (
+            {"SERVICENOW_AUTH_MODE": "automatic"},
+            {"SERVICENOW_CLIENT_SECRET": ""},
+            {"SERVICENOW_CLIENT_ID": ""},
+            {"SERVICENOW_HOST": "http://example.service-now.com"},
+            {"SERVICENOW_TOKEN_URL": "https://other.example/oauth_token.do"},
+            {"SERVICENOW_OAUTH_CLIENT_AUTH_METHOD": "unsupported"},
+        ):
+            with self.subTest(overrides=overrides):
+                with self.assertRaises(ServiceNowConfigError):
+                    self.config(**overrides)
+
+    @patch("servicenow_client.requests.Session.post")
+    def test_form_auth_cached_token_covers_attachment_requests(self, post):
+        post.return_value = self.token_response()
+        client = ServiceNowClient(self.config(
+            SERVICENOW_USERNAME="identity-only", SERVICENOW_PASSWORD="must-not-be-sent",
+            SERVICENOW_OAUTH_SCOPE="incident.read",
+        ))
+        self.assertEqual(self.prepare(client).headers["Authorization"], "Bearer test-token")
+        self.prepare(client)
+        post.assert_called_once()
+        self.assertEqual(post.call_args.kwargs["data"], {
+            "grant_type": "client_credentials", "client_id": "test-client",
+            "client_secret": "test-secret", "scope": "incident.read",
+        })
+        self.assertFalse(post.call_args.kwargs["allow_redirects"])
+
+    @patch("servicenow_client.requests.Session.post")
+    def test_client_basic_auth_does_not_put_secret_in_form(self, post):
+        post.return_value = self.token_response()
+        client = ServiceNowClient(self.config(
+            SERVICENOW_OAUTH_CLIENT_AUTH_METHOD="client_secret_basic"
+        ))
+        self.prepare(client)
+        self.assertEqual(post.call_args.kwargs["data"], {"grant_type": "client_credentials"})
+        self.assertIsInstance(client.session.auth, requests.auth.AuthBase)
+
+    @patch("servicenow_client.requests.Session.post")
+    def test_expired_token_is_reacquired(self, post):
+        post.return_value = self.token_response()
+        client = ServiceNowClient(self.config())
+        self.prepare(client)
+        client.session.auth._expires_at = 0
+        self.prepare(client)
+        self.assertEqual(post.call_count, 2)
+
+    @patch("servicenow_client.requests.Session.post")
+    def test_token_failure_redacted_and_no_basic_fallback(self, post):
+        post.return_value = MagicMock(status_code=401, text="test-secret")
+        client = ServiceNowClient(self.config())
+        with self.assertRaises(ServiceNowAPIError) as error:
+            self.prepare(client)
+        self.assertNotIn("test-secret", str(error.exception))
+        post.assert_called_once()
+
+    @patch("servicenow_client.requests.Session.post")
+    def test_invalid_token_response_rejected(self, post):
+        for payload in ({}, {"access_token": "test-token", "token_type": "Bearer", "expires_in": "nan"}):
+            with self.subTest(payload=payload):
+                post.return_value = MagicMock(status_code=200)
+                post.return_value.json.return_value = payload
+                with self.assertRaises(ServiceNowAPIError):
+                    self.prepare(ServiceNowClient(self.config()))
 
 
 def _make_client(groups=None):

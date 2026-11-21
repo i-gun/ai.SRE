@@ -12,19 +12,20 @@ Capabilities:
 - Resolve incidents with resolution note quality validation
 
 Authentication:
-- Basic auth using .env variables:
-  - SERVICENOW_HOST
-  - SERVICENOW_USERNAME
-  - SERVICENOW_PASSWORD
-  - SERVICENOW_ASSIGNMENT_GROUPS
+- Environment-selected Basic auth (default) or OAuth client credentials.
+- See docs/SERVICENOW_AUTHENTICATION.md for configuration and safe testing.
 """
 
 from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+import math
+import threading
+import time
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
+from urllib.parse import urlsplit
 
 import requests
 
@@ -45,8 +46,41 @@ class ServiceNowAPIError(Exception):
 class ServiceNowConfig:
     host: str
     username: str
-    password: str
+    password: str = field(repr=False)
     assignment_groups: List[str]
+    auth_mode: str = "basic"
+    client_id: str = ""
+    client_secret: str = field(default="", repr=False)
+    token_url: str = ""
+    oauth_scope: str = ""
+    oauth_client_auth_method: str = "client_secret_post"
+
+    def __post_init__(self) -> None:
+        if self.auth_mode not in {"basic", "oauth_client_credentials"}:
+            raise ServiceNowConfigError("Unsupported SERVICENOW_AUTH_MODE")
+        if self.auth_mode == "basic":
+            return
+        if not self.client_id or not self.client_secret:
+            raise ServiceNowConfigError(
+                "OAuth requires SERVICENOW_CLIENT_ID and SERVICENOW_CLIENT_SECRET"
+            )
+        if self.oauth_client_auth_method not in {
+            "client_secret_post", "client_secret_basic"
+        }:
+            raise ServiceNowConfigError("Unsupported SERVICENOW_OAUTH_CLIENT_AUTH_METHOD")
+        self.token_url = self.token_url or f"{self.host.rstrip('/')}/oauth_token.do"
+        host_parts = urlsplit(self.host)
+        token_parts = urlsplit(self.token_url)
+        if (
+            host_parts.scheme != "https"
+            or token_parts.scheme != "https"
+            or not host_parts.netloc
+            or host_parts.netloc != token_parts.netloc
+            or host_parts.username is not None
+            or token_parts.username is not None
+            or token_parts.query or token_parts.fragment
+        ):
+            raise ServiceNowConfigError("OAuth requires HTTPS and a same-origin token URL")
 
     @classmethod
     def from_env(cls) -> "ServiceNowConfig":
@@ -55,13 +89,14 @@ class ServiceNowConfig:
         password = os.getenv("SERVICENOW_PASSWORD", "").strip()
         assignment_groups_raw = os.getenv("SERVICENOW_ASSIGNMENT_GROUPS", "").strip()
         assignment_groups = cls._parse_assignment_groups(assignment_groups_raw)
+        auth_mode = os.getenv("SERVICENOW_AUTH_MODE", "basic").strip().lower()
 
         missing = [
             name
             for name, value in [
                 ("SERVICENOW_HOST", host),
-                ("SERVICENOW_USERNAME", username),
-                ("SERVICENOW_PASSWORD", password),
+                ("SERVICENOW_USERNAME", username if auth_mode == "basic" else "unused"),
+                ("SERVICENOW_PASSWORD", password if auth_mode == "basic" else "unused"),
                 ("SERVICENOW_ASSIGNMENT_GROUPS", assignment_groups_raw),
             ]
             if not value
@@ -87,6 +122,14 @@ class ServiceNowConfig:
             username=username,
             password=password,
             assignment_groups=assignment_groups,
+            auth_mode=auth_mode,
+            client_id=os.getenv("SERVICENOW_CLIENT_ID", "").strip(),
+            client_secret=os.getenv("SERVICENOW_CLIENT_SECRET", ""),
+            token_url=os.getenv("SERVICENOW_TOKEN_URL", "").strip(),
+            oauth_scope=os.getenv("SERVICENOW_OAUTH_SCOPE", "").strip(),
+            oauth_client_auth_method=os.getenv(
+                "SERVICENOW_OAUTH_CLIENT_AUTH_METHOD", "client_secret_post"
+            ).strip().lower(),
         )
 
     @staticmethod
@@ -100,6 +143,73 @@ class ServiceNowConfig:
             parsed.append(value)
             seen.add(value)
         return parsed
+
+
+class _ServiceNowOAuthAuth(requests.auth.AuthBase):
+    def __init__(self, config: ServiceNowConfig):
+        self.config = config
+        self._token = ""
+        self._expires_at = 0.0
+        self._lock = threading.Lock()
+
+    def __call__(self, request: requests.PreparedRequest) -> requests.PreparedRequest:
+        with self._lock:
+            if time.monotonic() >= self._expires_at:
+                self._acquire_token()
+            request.headers["Authorization"] = f"Bearer {self._token}"
+        return request
+
+    def _acquire_token(self) -> None:
+        self._token = ""
+        self._expires_at = 0.0
+        form = {"grant_type": "client_credentials"}
+        if self.config.oauth_scope:
+            form["scope"] = self.config.oauth_scope
+        if self.config.oauth_client_auth_method == "client_secret_basic":
+            client_auth = requests.auth.HTTPBasicAuth(
+                self.config.client_id, self.config.client_secret
+            )
+        else:
+            form.update({
+                "client_id": self.config.client_id,
+                "client_secret": self.config.client_secret,
+            })
+            client_auth = lambda request: request
+        started_at = time.monotonic()
+        try:
+            with requests.Session() as token_session:
+                token_session.auth = client_auth
+                response = token_session.post(
+                    self.config.token_url,
+                    data=form,
+                    headers={"Accept": "application/json"},
+                    timeout=30,
+                    allow_redirects=False,
+                )
+        except requests.RequestException:
+            raise ServiceNowAPIError("ServiceNow OAuth token request failed") from None
+        if response.status_code != 200:
+            raise ServiceNowAPIError(
+                f"ServiceNow OAuth token request failed (HTTP {response.status_code})"
+            )
+        try:
+            payload = response.json()
+            token = payload["access_token"]
+            token_type = payload["token_type"]
+            lifetime = float(payload["expires_in"])
+            if (
+                not isinstance(token, str) or not token
+                or any(character.isspace() for character in token)
+                or not isinstance(token_type, str) or token_type.lower() != "bearer"
+                or not math.isfinite(lifetime) or lifetime <= 0
+            ):
+                raise ValueError
+        except (ValueError, KeyError, TypeError):
+            raise ServiceNowAPIError("ServiceNow OAuth token response is invalid") from None
+        self._expires_at = started_at + lifetime - min(30.0, lifetime * 0.1)
+        if time.monotonic() >= self._expires_at:
+            raise ServiceNowAPIError("ServiceNow OAuth token expired during acquisition")
+        self._token = token
 
 
 class ServiceNowClient:
@@ -205,7 +315,11 @@ class ServiceNowClient:
     def __init__(self, config: ServiceNowConfig):
         self.config = config
         self.session = requests.Session()
-        self.session.auth = (config.username, config.password)
+        self.session.auth = (
+            (config.username, config.password)
+            if config.auth_mode == "basic"
+            else _ServiceNowOAuthAuth(config)
+        )
         self.session.headers.update(
             {
                 "Accept": "application/json",

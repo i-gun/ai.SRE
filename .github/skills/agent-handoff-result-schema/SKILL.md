@@ -1,11 +1,12 @@
 ---
 name: agent-handoff-result-schema
-description: "Use this reusable schema prompt to keep ServiceNow and Jira responses machine-readable and consistent."
+description: "Use this reusable handoff schema to keep ServiceNow and Jira responses machine-readable and consistent."
 disable-model-invocation: true
 ---
-# Reusable Prompt: Agent Handoff Result Schema
+# Reusable Agent Handoff Result Schema
 
-Use this reusable schema prompt to keep ServiceNow and Jira responses machine-readable and consistent.
+Use this shared output contract within `@ServiceNow` and `@Jira` handoffs. It standardizes
+responses only; it is not an agent, does not perform operations, and does not authorize writes.
 
 ```text
 Return response as strict JSON with these keys:

@@ -1,4 +1,4 @@
-# Skill Pack: ServiceNow + Jira Strict Workflow
+# Skill Pack Index: ServiceNow + Jira Strict Workflow
 
 This folder links to reusable skills for strict incident-to-problem-to-Jira orchestration.
 
@@ -10,23 +10,23 @@ This folder links to reusable skills for strict incident-to-problem-to-Jira orch
 
 Skills:
 - [servicenow-incident-to-prb-jira-strict](../skills/servicenow-incident-to-prb-jira-strict/SKILL.md)
-  Primary orchestrator prompt for ServiceNow with confirmation gate, always-fresh PRB behavior, native ServiceNow->Jira preferred routing, Jira-agent fallback when native path is unavailable, and strict completion reporting.
+  Primary ServiceNow skill with confirmation gate, always-fresh PRB behavior, native ServiceNow->Jira preferred routing, Jira-agent fallback when native path is unavailable, and strict completion reporting.
 - [jira-create-issue-from-servicenow-handoff](../skills/jira-create-issue-from-servicenow-handoff/SKILL.md)
-  Companion Jira prompt for routed issue creation with field-resolution guardrails and strict verification output.
+  Companion Jira skill for routed issue creation with field-resolution guardrails and strict verification output.
 - [servicenow-finalize-incident-from-jira-result](../skills/servicenow-finalize-incident-from-jira-result/SKILL.md)
-  Companion ServiceNow prompt for vendor-ticket backpropagation and controlled incident resolution from native ServiceNow->Jira or Jira-agent delegation results.
+  Companion ServiceNow skill for vendor-ticket backpropagation and controlled incident resolution from native ServiceNow->Jira or Jira-agent delegation results.
 - [agent-handoff-result-schema](../skills/agent-handoff-result-schema/SKILL.md)
   Reusable response schema for consistent machine-readable handoffs.
 
-# Use this skill pack from .github/prompts in this sequence.
+# Use this index to invoke the maintained skills in this sequence.
 
-1. Primary orchestration prompt:
+1. In the `@ServiceNow` context, invoke the primary orchestration skill:
   @ServiceNow, process incident INC0044438 with requested priority P3 and execute strict incident -> problem -> issue flow (native ServiceNow Jira preferred, Jira agent fallback).
 
-2. Jira companion prompt (fallback when native ServiceNow->Jira path is unavailable/unverified):
+2. In the `@Jira` context, invoke the Jira companion skill if the native path is unavailable or unverified:
   @Jira, create issue from ServiceNow handoff using strict field mapping and return a structured result.
 
-3. ServiceNow finalization prompt (after native ServiceNow->Jira or Jira agent returns issue identifier):
+3. In the `@ServiceNow` context, invoke the finalization skill after native ServiceNow->Jira or Jira returns an issue identifier:
   @ServiceNow, finalize incident INC0044438 using issue result and close workflow strictly.
 
 4. Optional reusable schema skill (for consistent agent outputs):

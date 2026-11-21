@@ -474,6 +474,32 @@ For all integrations:
 - [ ] API calls use Basic Auth or OAuth as appropriate
 - [ ] Request/response logging masks sensitive fields
 
+## AzurePortal Read-Only Integration Governance
+
+The `@AzurePortal` integration is restricted to Azure public cloud and documented Resource Graph, Azure Monitor Logs, metrics, and ARM read endpoints. Its implementation lives under `.github/skills/azureportal-*`; the clients expose finite operations, not arbitrary HTTP requests, `az rest`, or arbitrary Azure CLI execution.
+
+### Identity and scope
+
+- Require an explicit `AZUREPORTAL_AUTH_MODE` (`azure_cli`, `managed_identity`, or `service_principal`), tenant GUID, subscription allowlist, and verified workspace-GUID-to-ARM-resource-ID map. Never fall back between identities or tenants.
+- Use a separate Entra token audience for ARM/Resource Graph and Logs API. Do not send tokens to user-controlled hosts; reject redirects and revalidate every continuation URL and page scope.
+- Validate subscription, workspace, resource ID, and configured resource-group/resource allowlists before every operation. Do not request subscription-wide monitoring inventory if a narrower resource/group allowlist makes that request unsafe.
+- Assign least-privilege roles per control-plane and data-plane operation. Reader/Resource Graph, Monitoring Reader, and Log Analytics Reader are distinct permission needs; none should be assumed to grant the others.
+
+### Read-only and query isolation
+
+- Permit Resource Graph/Logs POST only as specifically implemented read/query operations. Never add write endpoints, unrestricted request tools, alert-state mutations, deployments, role assignments, or diagnostic-setting changes.
+- Accept only finite typed query templates. Do not expose arbitrary KQL and do not claim a regex can isolate the Kusto language. Reject cross-workspace/application/resource, external-data, and remote-query constructs by not accepting raw user KQL.
+- Treat resource properties, tags, telemetry, alert definitions, and workbook data as untrusted. Do not execute workbook actions or persist unfiltered API payloads.
+- Keep windows, rows, series, pages, timeout, retries, and concurrency finite. Distinguish empty queries, missing instrumentation, retention, forbidden access, partial results, truncation, throttling, and unsupported coverage.
+- Redact secrets and sensitive telemetry before it enters model context or evidence; API errors must not include tokens, client secrets, authorization headers, raw credential exceptions, or raw response payloads.
+
+### Evidence and reporting
+
+- Attach an evidence ID, retrieval timestamp, source/operation, authorized scope, UTC window, redacted query or reproducible parameters, sample counts, units/aggregation/dimensions, completeness/truncation warnings, and safe request/correlation IDs.
+- Separate observed telemetry, fired alert instances, configured thresholds/rules, Activity Log events, and diagnostic settings. Do not infer a breach from configuration or causation from timing alone.
+- The default report distinguishes confirmed findings from hypotheses and lowers confidence when telemetry or access is incomplete.
+- Use the opt-in live smoke procedure in [AZUREPORTAL.md](AZUREPORTAL.md) only after separate authorization. Unit tests must use mocks and no live credentials/network.
+
 ## Related Documentation
 
 - [Git Hooks Implementation](GIT_HOOKS_IMPLEMENTATION.md) — Automated commit processing

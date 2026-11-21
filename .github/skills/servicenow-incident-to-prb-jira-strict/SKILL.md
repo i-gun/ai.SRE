@@ -4,9 +4,9 @@ description: "Run a deterministic incident enrichment, fresh problem creation, n
 disable-model-invocation: true
 ---
 
-# ServiceNow Prompt: Strict Incident to Problem to Issue Flow (Native ServiceNow->Jira Preferred)
+# ServiceNow Skill: Strict Incident to Problem to Issue Flow (Native ServiceNow->Jira Preferred)
 
-Use this prompt with the ServiceNow agent to run deterministic incident enrichment, fresh problem creation, native ServiceNow->Jira routing when available, Jira-agent delegation otherwise, and strict incident resolution.
+Run this skill in the `@ServiceNow` context for deterministic incident enrichment, fresh problem creation, native ServiceNow->Jira routing when available, Jira-agent delegation otherwise, and strict incident resolution. `@ServiceNow` owns incident/problem operations; `@Jira` handles delegated issue creation when the native route is unavailable.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

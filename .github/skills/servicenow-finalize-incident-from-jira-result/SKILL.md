@@ -1,11 +1,11 @@
 ---
 name: servicenow-finalize-incident-from-jira-result
-description: "Use this prompt with the ServiceNow agent after issue creation is completed (native ServiceNow->Jira preferred, Jira-agent delegation fallback)."
+description: "Use this skill with the ServiceNow agent after issue creation is completed (native ServiceNow->Jira preferred, Jira-agent delegation fallback)."
 disable-model-invocation: true
 ---
-# ServiceNow Prompt: Finalize Incident From Issue Result
+# ServiceNow Skill: Finalize Incident From Issue Result
 
-Use this prompt with the ServiceNow agent after issue creation is completed (native ServiceNow->Jira preferred, Jira-agent delegation fallback).
+Run this skill in the `@ServiceNow` context after issue creation is completed (native ServiceNow->Jira preferred, Jira-agent delegation fallback).
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.

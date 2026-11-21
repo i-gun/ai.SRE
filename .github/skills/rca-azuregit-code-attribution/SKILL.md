@@ -7,7 +7,9 @@ disable-model-invocation: true
 
 # RCA AzureGit Code Attribution
 
-Use this prompt to perform targeted code attribution within the configured AzureGit scope. The agent must produce evidence-backed candidates or explicitly abstain — speculation is not permitted.
+Run this skill in the `@RCA` context to coordinate targeted code attribution with `@AzureGit`
+within its configured scope. The result must contain evidence-backed candidates or explicitly
+abstain — speculation is not permitted.
 
 Reuse-first policy:
 - Prefer existing promoted tools and shared functions before creating new automation.
